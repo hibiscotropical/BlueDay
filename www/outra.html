@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#123b46">
+    <title>Relatório</title>
+    <link rel="stylesheet" href="lib/framework7-bundle.min.css">
+    <link rel="stylesheet" href="css/personalizado.css">
+    <link rel="stylesheet" href="css/materialdesignicons.min.css">
+</head>
+
+<body>
+    <div id="app">
+        <div class="view view-main">
+            <div data-name="outra" class="page report-page">
+                <div class="navbar">
+                    <div class="navbar-bg"></div>
+                    <div class="navbar-inner">
+                        <div class="left">
+                            <a href="#" data-panel=".panel-left" class="link panel-open" aria-label="Abrir menu">
+                                <i class="mdi mdi-menu"></i>
+                            </a>
+                        </div>
+                        <div class="title">Relatório</div>
+                        <div class="right">
+                            <a href="/index/" class="link report-search" aria-label="Ir para as tarefas">
+                                <i class="mdi mdi-magnify"></i>
+                            </a>
+                            <a href="#" class="link task-avatar" aria-label="Perfil do usuário">
+                                <img src="img/user.jpg" data-profile-avatar alt="">
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="page-content">
+                    <main class="report-content">
+                        <section class="report-calendar" aria-label="Relatório mensal">
+                            <div class="report-heading">
+                                <h1 class="report-month-title"></h1>
+                            </div>
+                            <div class="report-calendar-grid"
+                                aria-label="Dias do mês. Deslize para os lados para mudar o mês."></div>
+                        </section>
+
+                        <section class="report-empty-state" aria-live="polite" hidden>
+                            <div class="report-empty-icon" aria-hidden="true">
+                                <i class="mdi mdi-calendar-blank-outline"></i>
+                            </div>
+                            <h2 class="report-empty-title"></h2>
+                            <p class="report-empty-message"></p>
+                            <button type="button" class="report-empty-add-button">
+                                Adicionar tarefa
+                            </button>
+                        </section>
+
+                        <section class="report-stats" aria-label="Resumo de atividade">
+                            <article class="report-stat-card report-completed-card">
+                                <h2>Dias Concluídos</h2>
+                                <div class="report-completed-value">
+                                    <strong class="report-completed-count">0</strong>
+                                    <span class="report-completed-total">/ 0</span>
+                                    <span class="report-progress-ring" aria-hidden="true"></span>
+                                </div>
+                            </article>
+                            <article class="report-stat-card report-streak-card">
+                                <div>
+                                    <h2>Série Atual</h2>
+                                    <strong class="report-streak-count">0</strong>
+                                </div>
+                                <i class="mdi mdi-arrow-right" aria-hidden="true"></i>
+                            </article>
+                        </section>
+
+                        <section class="report-feedback" aria-label="Feedback do desempenho">
+                            <h2>Dashboard Feedback</h2>
+                            <div class="report-mood" aria-hidden="true">
+                                <i class="mdi mdi-emoticon-outline"></i>
+                            </div>
+                            <h3 class="report-performance-title">Desempenho: Vamos começar!</h3>
+                            <p class="report-performance-message"></p>
+                        </section>
+                    </main>
+                    <a href="#" class="task-add-button report-add-button" aria-label="Adicionar tarefa">
+                        <i class="mdi mdi-plus"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="lib/framework7-bundle.min.js"></script>
+    <script type="text/javascript" src="lib/jquery-3.7.0.min.js"></script>
+    <script type="text/javascript" src="js/routes.js"></script>
+    <script src="cordova.js"></script>
+</body>
+
+</html>

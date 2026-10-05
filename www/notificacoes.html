@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#123b46">
+    <title>Configurações</title>
+    <link rel="stylesheet" href="lib/framework7-bundle.min.css">
+    <link rel="stylesheet" href="css/personalizado.css">
+    <link rel="stylesheet" href="css/materialdesignicons.min.css">
+</head>
+
+<body>
+    <div id="app">
+        <div class="view view-main">
+            <div data-name="notificacoes" class="page report-page settings-page">
+                <div class="navbar">
+                    <div class="navbar-bg"></div>
+                    <div class="navbar-inner">
+                        <div class="left">
+                            <a href="#" data-panel=".panel-left" class="link panel-open" aria-label="Abrir menu">
+                                <i class="mdi mdi-menu"></i>
+                            </a>
+                        </div>
+                        <div class="title">Configurações</div>
+                        <div class="right">
+                            <a href="/index/" class="link report-search" aria-label="Ir para as tarefas">
+                                <i class="mdi mdi-magnify"></i>
+                            </a>
+                            <a href="#" class="link task-avatar" aria-label="Perfil do usuário">
+                                <img src="img/user.jpg" data-profile-avatar alt="">
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="page-content">
+                    <main class="settings-content">
+                        <section class="settings-account" aria-labelledby="settings-account-title">
+                            <h1 id="settings-account-title">Conta</h1>
+                            <img class="settings-account-avatar" src="img/user.jpg" alt="">
+                            <h2 data-profile-name>Nome do Usuário</h2>
+                            <button class="settings-profile-button" type="button" aria-expanded="false">
+                                Editar Perfil
+                            </button>
+                            <div class="settings-profile-editor" hidden>
+                                <label for="settings-profile-name">Nome de usuário</label>
+                                <input id="settings-profile-name" class="settings-profile-name" type="text"
+                                    maxlength="60" autocomplete="name">
+                                <button class="settings-change-photo" type="button">Alterar foto</button>
+                                <input class="settings-photo-input" type="file" accept="image/*" hidden>
+                                <button class="settings-save-profile" type="button">Salvar perfil</button>
+                                <button class="settings-delete-data" type="button">Excluir dados da conta</button>
+                            </div>
+                        </section>
+
+                        <section class="settings-accordions" aria-label="Opções de configuração">
+                            <details class="settings-accordion">
+                                <summary>
+                                    <i class="mdi mdi-bell" aria-hidden="true"></i>
+                                    <span>Notificações</span>
+                                    <span class="settings-chevron" aria-hidden="true">
+                                        <i class="mdi mdi-chevron-down"></i>
+                                    </span>
+                                </summary>
+                                <div class="settings-accordion-content">
+                                    <label><input type="checkbox" data-notification-setting="taskReminders">
+                                        Lembretes de tarefas</label>
+                                    <label><input type="checkbox" data-notification-setting="dailySummary">
+                                        Resumo diário</label>
+                                </div>
+                            </details>
+
+                            <details class="settings-accordion">
+                                <summary>
+                                    <i class="mdi mdi-cloud" aria-hidden="true"></i>
+                                    <span>Sincronização &amp; Backup</span>
+                                    <span class="settings-chevron" aria-hidden="true">
+                                        <i class="mdi mdi-chevron-down"></i>
+                                    </span>
+                                </summary>
+                                <div class="settings-accordion-content">
+                                    <p>Suas tarefas estão salvas neste dispositivo.</p>
+                                    <button class="settings-backup-export" type="button">Exportar backup</button>
+                                    <button class="settings-backup-import" type="button">Restaurar backup</button>
+                                    <input class="settings-backup-input" type="file" accept="application/json,.json" hidden>
+                                </div>
+                            </details>
+
+                            <details class="settings-accordion settings-about-accordion">
+                                <summary>
+                                    <i class="mdi mdi-information" aria-hidden="true"></i>
+                                    <span>Sobre</span>
+                                    <span class="settings-chevron" aria-hidden="true">
+                                        <i class="mdi mdi-chevron-down"></i>
+                                    </span>
+                                </summary>
+                                <div class="settings-accordion-content">
+                                    <p>Aplicativo feito pela desenvolvedora Hibisco Tropical.<br> O aplicativo Blue Day permite que você crie e gerencie suas tarefas de forma simples e eficiente, criando um relatório de autoresponsabilidade.</p>
+                                    <p>Versão 1.0.0</p>
+                                </div>
+                            </details>
+                        </section>
+                    </main>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="lib/framework7-bundle.min.js"></script>
+    <script type="text/javascript" src="lib/jquery-3.7.0.min.js"></script>
+    <script type="text/javascript" src="js/routes.js"></script>
+    <script src="cordova.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <!-- Required meta tags-->
+    <meta charset="utf-8">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <!-- Color theme for statusbar (Android only) -->
+    <meta name="theme-color" content="#101620">
+    <!-- Your app title -->
+    <title>Blue Day</title>
+    <!-- Path to Framework7 Library Bundle CSS -->
+    <link rel="stylesheet" href="lib/framework7-bundle.min.css">
+    <!-- CSS PERSONALIZADO PARA MENU-->
+    <link rel="stylesheet" href="css/personalizado.css">
+    <!--Ícones Material Design-->
+    <link rel="stylesheet" href="css/materialdesignicons.min.css">
+    <link rel="icon" href="img/app-logo.png">
+
+</head>
+
+<body>
+    <!-- App root element -->
+    <div id="app">
+
+        <!-- Your main view, should have "view-main" class -->
+        <div class="view view-main">
+
+            <!-- Left Panel-->
+            <div class="panel panel-left panel-cover panel-resizable panel-init">
+                <div class="user-area block">
+                    <img width="80" src="img/user.jpg" data-profile-avatar alt="">
+                    <strong data-profile-name>Nome do Usuário</strong>
+                </div>
+                <div class="list no-margin no-hairlines no-hairlines-between no-chevron">
+                    <ul>
+                        <li>
+                            <a href="/index/" class="item-panel active link item-link item-content panel-close">
+                                <!-- ICONE -->
+                                <div class="item-media">
+                                    <i class="mdi mdi-home"></i>
+                                </div>
+                                <!-- TEXTO E BADGE-->
+                                <div class="item-inner">
+                                    <div class="item-title">Inicial</div>
+                                    <div class="item-after"></div>
+                                </div>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/outra/" class="link item-panel item-link item-content panel-close">
+                                <!-- ICONE -->
+                                <div class="item-media">
+                                    <i class="mdi mdi-chart-box-outline"></i>
+                                </div>
+                                <!-- TEXTO E BADGE-->
+                                <div class="item-inner">
+                                    <div class="item-title">Relatório</div>
+                                    <div class="item-after"></div>
+                                </div>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="/notificacoes/" class="link item-panel item-link item-content panel-close">
+                                <!-- ICONE -->
+                                <div class="item-media">
+                                    <i class="mdi mdi-cog-outline"></i>
+                                </div>
+                                <!-- TEXTO E BADGE-->
+                                <div class="item-inner">
+                                    <div class="item-title">Configurações</div>
+                                    <div class="item-after"></div>
+                                </div>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Initial Page, "data-name" contains page name -->
+            <div data-name="index" class="page task-page">
+                <!-- Top Navbar -->
+                <div class="navbar">
+                    <div class="navbar-bg"></div>
+                    <div class="navbar-inner">
+                        <div class="left">
+                            <a href="#" data-panel=".panel-left" class="link panel-open">
+                                <i class="mdi mdi-menu"></i>
+                            </a>
+                        </div>
+                        <div class="title">Lista de Tarefas</div>
+                        <div class="right">
+                            <button type="button" class="task-search" aria-label="Pesquisar tarefas">
+                                <i class="mdi mdi-magnify"></i>
+                            </button>
+                            <a href="#" class="link task-avatar" aria-label="Perfil do usuário">
+                                <img src="img/user.jpg" data-profile-avatar alt="">
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Scrollable page content -->
+                <div class="page-content">
+                    <main class="task-content">
+                        <section class="task-calendar" aria-label="Calendário de tarefas">
+                            <div class="task-month-row">
+                                <span class="task-month-label"></span>
+                                <div class="task-month-controls">
+                                    <button type="button" aria-label="Mês anterior">
+                                        <i class="mdi mdi-chevron-left"></i>
+                                    </button>
+                                    <button type="button" aria-label="Próximo mês">
+                                        <i class="mdi mdi-chevron-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="task-days" aria-label="Dias do mês"></div>
+                        </section>
+
+                        <section class="task-empty" aria-label="Tarefas do dia">
+                            <div class="task-day-heading">
+                                <h1>Terça-feira, 24</h1>
+                                <p>Você tem 0 tarefas pendentes</p>
+                            </div>
+                            <ul class="task-items" aria-label="Tarefas deste dia"></ul>
+                            <div class="task-empty-state">
+                                <div class="task-check-circle" aria-hidden="true">
+                                    <i class="mdi mdi-check-circle-outline"></i>
+                                </div>
+                                <h2>Tudo limpo por aqui!</h2>
+                                <p>Nenhuma tarefa para hoje.<br>Aproveite seu dia livre ou planeje<br>algo novo.</p>
+                            </div>
+                        </section>
+                    </main>
+                    <a href="#" class="task-add-button" aria-label="Adicionar tarefa">
+                        <i class="mdi mdi-plus"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Path to Framework7 Library Bundle JS-->
+    <script type="text/javascript" src="lib/framework7-bundle.min.js"></script>
+	<!-- jQuery -->
+	<script type="text/javascript" src="lib/jquery-3.7.0.min.js"></script>	
+    <!-- Roteamento do app-->
+    <script type="text/javascript" src="js/routes.js"></script>
+    <script type="text/javascript" src="js/tasks.js"></script>
+    <script type="text/javascript" src="js/report.js"></script>
+    <script type="text/javascript" src="js/settings.js"></script>
+    <script src="cordova.js"></script>
+</body>
+
+</html>

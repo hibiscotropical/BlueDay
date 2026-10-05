@@ -1,0 +1,14 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="br.com.daylist" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>Blue Day</name>
+    <description>
+        Um simples app de organizar as suas tarefas por dias da semana, com a possibilidade de adicionar, remover e marcar como concluídas.
+    </description>
+    <author email="dev@cordova.apache.org" href="https://cordova.apache.org">
+        Hibisco Team
+    </author>
+    <icon src="www/img/app-logo.png" />
+    <content src="index.html" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+</widget>
