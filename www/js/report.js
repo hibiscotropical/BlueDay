@@ -34,6 +34,7 @@
 
     pageRoot.dataset.reportInitialized = 'true';
     var storagePrefix = 'day-list-tasks:';
+    var maxTaskTitleLength = 200;
     var today = new Date();
     today.setHours(0, 0, 0, 0);
     var visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -54,6 +55,10 @@
         month.slice(1) + ' ' + date.getFullYear();
     }
 
+    function sanitizeTaskTitle(title) {
+      return title.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim().slice(0, maxTaskTitleLength);
+    }
+
     function loadReportTasks() {
       var tasks = {};
 
@@ -72,12 +77,12 @@
 
           tasks[dateKey] = entries.map(function (entry) {
             if (typeof entry === 'string') {
-              return { title: entry, completed: false };
+              return { title: sanitizeTaskTitle(entry), completed: false };
             }
             if (!entry || typeof entry.title !== 'string' || typeof entry.completed !== 'boolean') {
               throw new Error('Os dados de uma tarefa não são válidos.');
             }
-            return { title: entry.title, completed: entry.completed };
+            return { title: sanitizeTaskTitle(entry.title), completed: entry.completed };
           });
         }
       } catch (error) {
@@ -397,8 +402,14 @@
     function openAddTaskDialog(event) {
       event.preventDefault();
       app.dialog.prompt('Digite a tarefa para este dia:', 'Nova tarefa', function (value) {
-        var title = value.trim();
+        var title = typeof value === 'string'
+          ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim()
+          : '';
         if (!title) {
+          return;
+        }
+        if (title.length > maxTaskTitleLength) {
+          app.dialog.alert('A tarefa deve ter no máximo ' + maxTaskTitleLength + ' caracteres.');
           return;
         }
 

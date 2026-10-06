@@ -1,7 +1,7 @@
 {
   "name": "br.com.blueday",
   "displayName": "Blue Day",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Um simples app de organizar as suas tarefas por dias da semana, com a possibilidade de adicionar, remover e marcar como concluídas.A sample Apache Cordova application that responds to the deviceready event.",
   "main": "index.js",
   "scripts": {

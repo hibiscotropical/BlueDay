@@ -3,6 +3,13 @@
   var settingsStorageKey = 'day-list-settings';
   var taskStoragePrefix = 'day-list-tasks:';
   var legacyTaskStorageKey = 'day-list-tasks';
+  var maxProfileNameLength = 60;
+  var maxTaskTitleLength = 200;
+  var maxPhotoFileSize = 2 * 1024 * 1024;
+  var avatarDataUrlPrefix = 'data:image/jpeg;base64,';
+  var maxAvatarDataUrlLength = avatarDataUrlPrefix.length +
+    4 * Math.ceil(maxPhotoFileSize / 3);
+  var maxBackupFileSize = 10 * 1024 * 1024;
   var defaultProfile = { name: 'Nome do Usuário', avatar: 'img/user.jpg' };
   var defaultSettings = {
     taskReminders: false,
@@ -31,10 +38,44 @@
   function readProfile() {
     var profile = readJson(profileStorageKey, defaultProfile);
     if (!profile || typeof profile.name !== 'string' ||
-        typeof profile.avatar !== 'string') {
+        typeof profile.avatar !== 'string' || !isValidAvatar(profile.avatar)) {
       return defaultProfile;
     }
-    return { name: profile.name, avatar: profile.avatar };
+    var name = cleanText(profile.name, maxProfileNameLength);
+    if (!name) {
+      return defaultProfile;
+    }
+    return { name: name, avatar: profile.avatar };
+  }
+
+  function cleanText(value, maxLength) {
+    return value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim().slice(0, maxLength);
+  }
+
+  function validateText(value, maxLength, label) {
+    var cleanValue = cleanText(value, maxLength);
+    if (!cleanValue) {
+      throw new Error(label + ' não pode ficar vazio.');
+    }
+    if (cleanText(value, value.length).length > maxLength) {
+      throw new Error(label + ' deve ter no máximo ' + maxLength + ' caracteres.');
+    }
+    return cleanValue;
+  }
+
+  function isValidAvatar(avatar) {
+    if (avatar === defaultProfile.avatar) {
+      return true;
+    }
+    if (typeof avatar !== 'string' || avatar.length > maxAvatarDataUrlLength ||
+        avatar.indexOf(avatarDataUrlPrefix) !== 0 ||
+        !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(avatar)) {
+      return false;
+    }
+    var data = avatar.slice(avatarDataUrlPrefix.length);
+    var padding = data.slice(-2) === '==' ? 2 : (data.slice(-1) === '=' ? 1 : 0);
+    return data.length % 4 === 0 &&
+      Math.floor(data.length * 3 / 4) - padding <= maxPhotoFileSize;
   }
 
   function readSettings() {
@@ -125,13 +166,22 @@
     if (!Array.isArray(tasks)) {
       throw new Error('As tarefas no backup estão inválidas.');
     }
-    tasks.forEach(function (task) {
+    return tasks.map(function (task) {
+      var title;
+      var completed = false;
       if (typeof task === 'string') {
-        return;
-      }
-      if (!task || typeof task.title !== 'string' || typeof task.completed !== 'boolean') {
+        title = task;
+      } else if (task && typeof task.title === 'string' &&
+          typeof task.completed === 'boolean') {
+        title = task.title;
+        completed = task.completed;
+      } else {
         throw new Error('Uma tarefa no backup está inválida.');
       }
+      return {
+        title: validateText(title, maxTaskTitleLength, 'O título da tarefa'),
+        completed: completed
+      };
     });
   }
 
@@ -272,6 +322,16 @@
 
   function compressImage(file) {
     return new Promise(function (resolve, reject) {
+      var supportedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp'];
+      if (!file || supportedTypes.indexOf(file.type) === -1) {
+        reject(new Error('Selecione uma foto JPEG, PNG, WebP, GIF ou BMP.'));
+        return;
+      }
+      if (file.size > maxPhotoFileSize) {
+        reject(new Error('A foto deve ter no máximo 2 MB.'));
+        return;
+      }
+
       var reader = new FileReader();
       reader.onerror = function () {
         reject(new Error('Não foi possível ler a imagem selecionada.'));
@@ -282,7 +342,13 @@
           reject(new Error('O arquivo selecionado não é uma imagem válida.'));
         };
         image.onload = function () {
-          var maxDimension = 320;
+          if (!image.width || !image.height ||
+              image.width > 8192 || image.height > 8192 ||
+              image.width * image.height > 40000000) {
+            reject(new Error('As dimensões da foto são grandes demais para processar.'));
+            return;
+          }
+          var maxDimension = 1024;
           var scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
           var canvas = document.createElement('canvas');
           canvas.width = Math.max(1, Math.round(image.width * scale));
@@ -293,7 +359,17 @@
             return;
           }
           context.drawImage(image, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/jpeg', 0.78));
+          var imageData = '';
+          [0.82, 0.72, 0.62, 0.52, 0.42].some(function (quality) {
+            imageData = canvas.toDataURL('image/jpeg', quality);
+            return imageData.length <= maxAvatarDataUrlLength &&
+              isValidAvatar(imageData);
+          });
+          if (!isValidAvatar(imageData)) {
+            reject(new Error('Não foi possível comprimir a foto para menos de 2 MB.'));
+            return;
+          }
+          resolve(imageData);
         };
         image.src = String(reader.result);
       };
@@ -318,24 +394,30 @@
         if (!isValidDateKey(dateKey)) {
           throw new Error('Uma data de tarefa no backup está inválida.');
         }
-        validateTaskList(JSON.parse(value));
+        safeData[key] = JSON.stringify(validateTaskList(JSON.parse(value)));
       } else if (key === legacyTaskStorageKey) {
         var tasksByDate = JSON.parse(value);
         if (!tasksByDate || typeof tasksByDate !== 'object' || Array.isArray(tasksByDate)) {
           throw new Error('As tarefas antigas no backup estão inválidas.');
         }
+        var safeTasksByDate = {};
         Object.keys(tasksByDate).forEach(function (dateKey) {
           if (!isValidDateKey(dateKey)) {
             throw new Error('Uma data de tarefa no backup está inválida.');
           }
-          validateTaskList(tasksByDate[dateKey]);
+          safeTasksByDate[dateKey] = validateTaskList(tasksByDate[dateKey]);
         });
+        safeData[key] = JSON.stringify(safeTasksByDate);
       } else if (key === profileStorageKey) {
         var profile = JSON.parse(value);
-        if (!profile || typeof profile.name !== 'string' || !profile.name.trim() ||
-            profile.name.length > 60 || typeof profile.avatar !== 'string') {
+        if (!profile || typeof profile.name !== 'string' ||
+            typeof profile.avatar !== 'string' || !isValidAvatar(profile.avatar)) {
           throw new Error('O perfil no backup está inválido.');
         }
+        safeData[key] = JSON.stringify({
+          name: validateText(profile.name, maxProfileNameLength, 'O nome do perfil'),
+          avatar: profile.avatar
+        });
       } else if (key === settingsStorageKey) {
         var settings = JSON.parse(value);
         if (!settings || typeof settings !== 'object' || Array.isArray(settings) ||
@@ -344,8 +426,14 @@
             (settings.dailySummary !== undefined && typeof settings.dailySummary !== 'boolean')) {
           throw new Error('As configurações no backup estão inválidas.');
         }
+        safeData[key] = JSON.stringify({
+          taskReminders: settings.taskReminders === true,
+          dailySummary: settings.dailySummary === true,
+          theme: settings.theme === 'light' ? 'light' : 'dark'
+        });
+      } else {
+        safeData[key] = value;
       }
-      safeData[key] = value;
     });
     return safeData;
   }
@@ -399,6 +487,10 @@
       return;
     }
     var blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    if (blob.size > maxBackupFileSize) {
+      showError('O backup gerado excede o limite de 10 MB. Reduza os dados salvos e tente novamente.');
+      return;
+    }
 
     if (typeof File === 'function' && navigator.canShare && navigator.share) {
       var file = new File([blob], 'day-list-backup.json', { type: 'application/json' });
@@ -495,18 +587,27 @@
       }
 
       if (event.target === photoInput && photoInput.files && photoInput.files[0]) {
+        selectedAvatar = null;
         compressImage(photoInput.files[0]).then(function (imageData) {
           selectedAvatar = imageData;
           accountAvatar.src = imageData;
         }).catch(function (error) {
           showError(error.message);
+        }).then(function () {
+          photoInput.value = '';
         });
       }
 
       if (event.target === backupInput && backupInput.files && backupInput.files[0]) {
+        if (backupInput.files[0].size > maxBackupFileSize) {
+          showError('O arquivo de backup deve ter no máximo 10 MB.');
+          backupInput.value = '';
+          return;
+        }
         var reader = new FileReader();
         reader.onerror = function () {
           showError('Não foi possível ler o arquivo de backup.');
+          backupInput.value = '';
         };
         reader.onload = function () {
           var safeData;
@@ -551,9 +652,11 @@
     });
 
     saveProfileButton.addEventListener('click', function () {
-      var name = profileName.value.trim();
-      if (!name) {
-        showError('Digite um nome para o perfil.');
+      var name;
+      try {
+        name = validateText(profileName.value, maxProfileNameLength, 'O nome do perfil');
+      } catch (error) {
+        showError(error.message);
         profileName.focus();
         return;
       }

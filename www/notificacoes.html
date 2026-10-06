@@ -51,7 +51,10 @@
                                 <input id="settings-profile-name" class="settings-profile-name" type="text"
                                     maxlength="60" autocomplete="name">
                                 <button class="settings-change-photo" type="button">Alterar foto</button>
-                                <input class="settings-photo-input" type="file" accept="image/*" hidden>
+                                <input class="settings-photo-input" type="file"
+                                    accept="image/jpeg,image/png,image/webp,image/gif,image/bmp" hidden>
+                                <p>Fotos de até 2 MB serão reprocessadas para remover metadados e reduzidas
+                                    para no máximo 1024 × 1024 px.</p>
                                 <button class="settings-save-profile" type="button">Salvar perfil</button>
                                 <button class="settings-delete-data" type="button">Excluir dados da conta</button>
                             </div>
@@ -83,7 +86,7 @@
                                     </span>
                                 </summary>
                                 <div class="settings-accordion-content">
-                                    <p>Suas tarefas estão salvas neste dispositivo.</p>
+                                    <p>Suas tarefas estão salvas neste dispositivo. Arquivos de backup devem ter até 10 MB.</p>
                                     <button class="settings-backup-export" type="button">Exportar backup</button>
                                     <button class="settings-backup-import" type="button">Restaurar backup</button>
                                     <input class="settings-backup-input" type="file" accept="application/json,.json" hidden>
@@ -100,7 +103,7 @@
                                 </summary>
                                 <div class="settings-accordion-content">
                                     <p>Aplicativo feito pela desenvolvedora Hibisco Tropical.<br> O aplicativo Blue Day permite que você crie e gerencie suas tarefas de forma simples e eficiente, criando um relatório de autoresponsabilidade.</p>
-                                    <p>Versão 1.0.0</p>
+                                    <p>Versão 1.0.1</p>
                                 </div>
                             </details>
                         </section>

@@ -10,6 +10,7 @@
   pageRoot.dataset.taskCalendarInitialized = 'true';
   var storagePrefix = 'day-list-tasks:';
   var legacyStorageKey = 'day-list-tasks';
+  var maxTaskTitleLength = 200;
   var monthLabel = pageRoot.querySelector('.task-month-label');
   var daysContainer = pageRoot.querySelector('.task-days');
   var monthControls = pageRoot.querySelector('.task-month-controls');
@@ -44,6 +45,10 @@
 
   function capitalize(text) {
     return text.charAt(0).toLocaleUpperCase('pt-BR') + text.slice(1);
+  }
+
+  function sanitizeTaskTitle(title) {
+    return title.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim().slice(0, maxTaskTitleLength);
   }
 
   function loadTasks() {
@@ -118,14 +123,14 @@
 
     return tasks.map(function (task) {
       if (typeof task === 'string') {
-        return { title: task, completed: false };
+        return { title: sanitizeTaskTitle(task), completed: false };
       }
 
       if (!task || typeof task.title !== 'string' || typeof task.completed !== 'boolean') {
         throw new Error('Formato de tarefa inválido.');
       }
 
-      return { title: task.title, completed: task.completed };
+      return { title: sanitizeTaskTitle(task.title), completed: task.completed };
     });
   }
 
@@ -285,9 +290,15 @@
 
   function addTask() {
     app.dialog.prompt('Digite a tarefa para este dia:', 'Nova tarefa', function (value) {
-      var title = value.trim();
+      var title = typeof value === 'string'
+        ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim()
+        : '';
 
       if (!title) {
+        return;
+      }
+      if (title.length > maxTaskTitleLength) {
+        app.dialog.alert('A tarefa deve ter no máximo ' + maxTaskTitleLength + ' caracteres.');
         return;
       }
 
@@ -420,7 +431,7 @@
     }
 
     app.dialog.confirm(
-      'Tem certeza de que deseja excluir a tarefa "' + task.title + '"?',
+      'Tem certeza de que deseja excluir a tarefa "' + escapeHtml(task.title) + '"?',
       'Excluir tarefa',
       function () {
         var previousTasks = tasksByDate[dateKey];
