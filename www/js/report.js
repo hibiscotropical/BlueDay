@@ -178,6 +178,24 @@
       return completedDays;
     }
 
+    function getElapsedWorkdays(sunday) {
+      if (sunday.getDay() !== 0) {
+        return 0;
+      }
+
+      var monday = new Date(sunday);
+      monday.setDate(monday.getDate() - 6);
+      var elapsedDays = 0;
+      for (var day = 0; day < 6; day += 1) {
+        var workday = new Date(monday);
+        workday.setDate(monday.getDate() + day);
+        if (workday.getTime() < today.getTime()) {
+          elapsedDays += 1;
+        }
+      }
+      return elapsedDays;
+    }
+
     function hasEarnedRestDay(sunday) {
       return getCompletedWorkdays(sunday) >= 5;
     }
@@ -223,8 +241,9 @@
         return tasksByDate[dateKey].length > 0;
       });
       var completedWeekDays = getCompletedWorkdays(getWeekEndingSunday(today));
+      var elapsedWeekDays = getElapsedWorkdays(getWeekEndingSunday(today));
       var completionRate = Math.round((completedWeekDays / 6) * 100);
-      var hasEarnedRestThisWeek = completedWeekDays >= 5;
+      var hasEarnedRestThisWeek = elapsedWeekDays === 6 && completedWeekDays >= 5;
 
       emptyState.hidden = hasMonthTasks;
       emptyAddButton.hidden = hasMonthTasks;
@@ -236,8 +255,18 @@
       progressRing.style.setProperty('--report-progress', completionRate + '%');
       streakCount.textContent = String(getCurrentStreak());
 
-      mood.classList.remove('report-mood-good', 'report-mood-medium', 'report-mood-low');
-      if (hasEarnedRestThisWeek) {
+      mood.classList.remove(
+        'report-mood-good',
+        'report-mood-medium',
+        'report-mood-low',
+        'report-mood-persistence'
+      );
+      if (elapsedWeekDays < 6) {
+        mood.classList.add('report-mood-persistence');
+        moodIcon.className = 'mdi mdi-emoticon-outline';
+        performanceTitle.textContent = 'Persistência';
+        performanceMessage.textContent = 'A frequência da semana será avaliada após o fim dos seis dias. Continue no seu ritmo.';
+      } else if (hasEarnedRestThisWeek) {
         mood.classList.add('report-mood-good');
         moodIcon.className = 'mdi mdi-emoticon-happy';
         performanceTitle.textContent = 'Descanso merecido!';

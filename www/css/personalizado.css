@@ -850,6 +850,10 @@ body::-webkit-scrollbar,
     background: #25a86b;
 }
 
+.report-mood-persistence {
+    background: #2d73ec;
+}
+
 .report-mood-medium {
     background: #d99b21;
 }
