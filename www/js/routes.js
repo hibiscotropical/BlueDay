@@ -1,5 +1,3 @@
-//INICIALIZAÇÃO DO F7 QUANDO DISPOSITIVO ESTÁ PRONTO
-document.addEventListener('deviceready', onDeviceReady, false);
 var $$ = Dom7;
 var app = new Framework7({
   // App root element
@@ -98,8 +96,38 @@ if (leftPanel) {
   leftPanel.disableSwipe();
 }
 
-// Para testes locais
-var mainView = app.views.create('.view-main', { url: '/index/' });
+var mainView;
+
+function initializeMainView() {
+  if (!mainView) {
+    mainView = app.views.create('.view-main', { url: '/index/' });
+  }
+}
+
+function onDeviceReady() {
+  initializeMainView();
+
+  //COMANDO PARA "OUVIR" O BOTAO VOLTAR NATIVO DO ANDROID
+  document.addEventListener("backbutton", function (e) {
+
+    if (mainView.router.currentRoute.path === '/index/') {
+      e.preventDefault();
+      app.dialog.confirm('Deseja sair do aplicativo?', function () {
+        navigator.app.exitApp();
+      });
+    } else {
+      e.preventDefault();
+      mainView.router.back({ force: true });
+    }
+  }, false);
+}
+
+document.addEventListener('deviceready', onDeviceReady, false);
+document.addEventListener('DOMContentLoaded', function () {
+  if (!window.cordova) {
+    initializeMainView();
+  }
+}, false);
 
 //EVENTO PARA SABER O ITEM DO MENU ATUAL
 app.on('routeChange', function (route) {
@@ -114,25 +142,3 @@ app.on('routeChange', function (route) {
     targetEl.classList.add('active');
   }
 });
-
-
-
-function onDeviceReady() {
-  //Quando estiver rodando no celular
-  var mainView = app.views.create('.view-main', { url: '/index/' });
-
-  //COMANDO PARA "OUVIR" O BOTAO VOLTAR NATIVO DO ANDROID 	
-  document.addEventListener("backbutton", function (e) {
-
-    if (mainView.router.currentRoute.path === '/index/') {
-      e.preventDefault();
-      app.dialog.confirm('Deseja sair do aplicativo?', function () {
-        navigator.app.exitApp();
-      });
-    } else {
-      e.preventDefault();
-      mainView.router.back({ force: true });
-    }
-  }, false);
-
-}

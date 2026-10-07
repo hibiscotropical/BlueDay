@@ -50,11 +50,50 @@
                                 <label for="settings-profile-name">Nome de usuário</label>
                                 <input id="settings-profile-name" class="settings-profile-name" type="text"
                                     maxlength="60" autocomplete="name">
-                                <button class="settings-change-photo" type="button">Alterar foto</button>
-                                <input class="settings-photo-input" type="file"
-                                    accept="image/jpeg,image/png,image/webp,image/gif,image/bmp" hidden>
-                                <p>Fotos de até 2 MB serão reprocessadas para remover metadados e reduzidas
-                                    para no máximo 1024 × 1024 px.</p>
+                                <span class="settings-avatar-label" id="settings-avatar-label">Escolha um avatar</span>
+                                <div class="settings-avatar-options" role="group"
+                                    aria-labelledby="settings-avatar-label">
+                                    <button class="settings-avatar-option" type="button" aria-pressed="false"
+                                        data-avatar-choice="img/avatar-gato.png"
+                                        aria-label="Avatar de gato">
+                                        <img src="img/avatar-gato.png" alt="">
+                                    </button>
+                                    <button class="settings-avatar-option" type="button" aria-pressed="false"
+                                        data-avatar-choice="img/avatar-raposa.png"
+                                        aria-label="Avatar de raposa">
+                                        <img src="img/avatar-raposa.png" alt="">
+                                    </button>
+                                    <button class="settings-avatar-option" type="button" aria-pressed="false"
+                                        data-avatar-choice="img/avatar-robo-verde.png"
+                                        aria-label="Avatar de robô verde">
+                                        <img src="img/avatar-robo-verde.png" alt="">
+                                    </button>
+                                    <button class="settings-avatar-option" type="button" aria-pressed="false"
+                                        data-avatar-choice="img/avatar-pinguim.png"
+                                        aria-label="Avatar de pinguim">
+                                        <img src="img/avatar-pinguim.png" alt="">
+                                    </button>
+                                    <button class="settings-avatar-option" type="button" aria-pressed="false"
+                                        data-avatar-choice="img/avatar-panda.png"
+                                        aria-label="Avatar de panda">
+                                        <img src="img/avatar-panda.png" alt="">
+                                    </button>
+                                    <button class="settings-avatar-option" type="button" aria-pressed="false"
+                                        data-avatar-choice="img/avatar-robo-roxo.png"
+                                        aria-label="Avatar de robô roxo">
+                                        <img src="img/avatar-robo-roxo.png" alt="">
+                                    </button>
+                                    <button class="settings-avatar-option" type="button" aria-pressed="false"
+                                        data-avatar-choice="img/avatar-coruja.png"
+                                        aria-label="Avatar de coruja">
+                                        <img src="img/avatar-coruja.png" alt="">
+                                    </button>
+                                    <button class="settings-avatar-option" type="button" aria-pressed="false"
+                                        data-avatar-choice="img/avatar-hipopotamo.png"
+                                        aria-label="Avatar de hipopótamo">
+                                        <img src="img/avatar-hipopotamo.png" alt="">
+                                    </button>
+                                </div>
                                 <button class="settings-save-profile" type="button">Salvar perfil</button>
                                 <button class="settings-delete-data" type="button">Excluir dados da conta</button>
                             </div>
@@ -72,8 +111,10 @@
                                 <div class="settings-accordion-content">
                                     <label><input type="checkbox" data-notification-setting="taskReminders">
                                         Lembretes de tarefas</label>
+                                    <p>Enviado todos os dias às 9h.</p>
                                     <label><input type="checkbox" data-notification-setting="dailySummary">
                                         Resumo diário</label>
+                                    <p>Enviado todos os dias às 20h. Abra o app para consultar as tarefas concluídas e pendentes.</p>
                                 </div>
                             </details>
 
@@ -103,7 +144,7 @@
                                 </summary>
                                 <div class="settings-accordion-content">
                                     <p>Aplicativo feito pela desenvolvedora Hibisco Tropical.<br> O aplicativo Blue Day permite que você crie e gerencie suas tarefas de forma simples e eficiente, criando um relatório de autoresponsabilidade.</p>
-                                    <p>Versão 1.0.1</p>
+                                    <p>Versão 1.0.2</p>
                                 </div>
                             </details>
                         </section>

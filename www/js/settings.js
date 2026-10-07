@@ -5,12 +5,18 @@
   var legacyTaskStorageKey = 'day-list-tasks';
   var maxProfileNameLength = 60;
   var maxTaskTitleLength = 200;
-  var maxPhotoFileSize = 2 * 1024 * 1024;
-  var avatarDataUrlPrefix = 'data:image/jpeg;base64,';
-  var maxAvatarDataUrlLength = avatarDataUrlPrefix.length +
-    4 * Math.ceil(maxPhotoFileSize / 3);
   var maxBackupFileSize = 10 * 1024 * 1024;
-  var defaultProfile = { name: 'Nome do Usuário', avatar: 'img/user.jpg' };
+  var avatarOptions = [
+    'img/avatar-gato.png',
+    'img/avatar-raposa.png',
+    'img/avatar-robo-verde.png',
+    'img/avatar-pinguim.png',
+    'img/avatar-panda.png',
+    'img/avatar-robo-roxo.png',
+    'img/avatar-coruja.png',
+    'img/avatar-hipopotamo.png'
+  ];
+  var defaultProfile = { name: 'Nome do Usuário', avatar: avatarOptions[0] };
   var defaultSettings = {
     taskReminders: false,
     dailySummary: false,
@@ -37,15 +43,17 @@
 
   function readProfile() {
     var profile = readJson(profileStorageKey, defaultProfile);
-    if (!profile || typeof profile.name !== 'string' ||
-        typeof profile.avatar !== 'string' || !isValidAvatar(profile.avatar)) {
+    if (!profile || typeof profile.name !== 'string') {
       return defaultProfile;
     }
     var name = cleanText(profile.name, maxProfileNameLength);
     if (!name) {
       return defaultProfile;
     }
-    return { name: name, avatar: profile.avatar };
+    return {
+      name: name,
+      avatar: isValidAvatar(profile.avatar) ? profile.avatar : defaultProfile.avatar
+    };
   }
 
   function cleanText(value, maxLength) {
@@ -64,18 +72,7 @@
   }
 
   function isValidAvatar(avatar) {
-    if (avatar === defaultProfile.avatar) {
-      return true;
-    }
-    if (typeof avatar !== 'string' || avatar.length > maxAvatarDataUrlLength ||
-        avatar.indexOf(avatarDataUrlPrefix) !== 0 ||
-        !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(avatar)) {
-      return false;
-    }
-    var data = avatar.slice(avatarDataUrlPrefix.length);
-    var padding = data.slice(-2) === '==' ? 2 : (data.slice(-1) === '=' ? 1 : 0);
-    return data.length % 4 === 0 &&
-      Math.floor(data.length * 3 / 4) - padding <= maxPhotoFileSize;
+    return typeof avatar === 'string' && avatarOptions.indexOf(avatar) !== -1;
   }
 
   function readSettings() {
@@ -129,7 +126,7 @@
       applyProfile();
       return true;
     } catch (error) {
-      showError('Não foi possível salvar o perfil. A imagem pode ser muito grande.');
+      showError('Não foi possível salvar o perfil. Verifique o espaço disponível no dispositivo.');
       return false;
     }
   }
@@ -255,15 +252,27 @@
     }
   }
 
-  function scheduleNotification(localNotifications, key, enabled) {
+  function scheduleNotification(localNotifications, key, enabled, checkbox) {
     if (!localNotifications) {
       return;
     }
 
-    var notificationId = key === 'taskReminders' ? 4101 : 4102;
+    var notification = key === 'taskReminders'
+      ? {
+        id: 4101,
+        hour: 9,
+        title: 'Lembrete de tarefas',
+        text: 'Confira as tarefas planejadas para hoje.'
+      }
+      : {
+        id: 4102,
+        hour: 20,
+        title: 'Resumo diário',
+        text: 'Seu resumo de hoje está pronto. Abra o Blue Day para conferir suas tarefas concluídas e pendentes.'
+      };
     if (!enabled) {
       try {
-        localNotifications.cancel(notificationId);
+        localNotifications.cancel(notification.id);
       } catch (error) {
         console.error('Não foi possível cancelar a notificação agendada.', error);
         showError('Não foi possível desativar a notificação neste dispositivo.');
@@ -271,26 +280,31 @@
       return;
     }
 
+    function handleSchedulingFailure(error) {
+      if (error) {
+        console.error('Não foi possível agendar a notificação diária.', error);
+      }
+      currentNotificationSettings[key] = false;
+      if (checkbox) {
+        checkbox.checked = false;
+      }
+      saveSettings(currentNotificationSettings);
+      showError('Não foi possível agendar a notificação neste dispositivo.');
+    }
+
     try {
       localNotifications.schedule({
-        id: notificationId,
-        title: key === 'taskReminders' ? 'Lembrete de tarefas' : 'Resumo diário',
-        text: key === 'taskReminders'
-          ? 'Confira as tarefas planejadas para hoje.'
-          : 'Confira seu progresso e conclua as tarefas do dia.',
-        trigger: { every: 'day' }
+        id: notification.id,
+        title: notification.title,
+        text: notification.text,
+        trigger: { every: { hour: notification.hour, minute: 0 } }
       }, function (result) {
         if (result === false) {
-          currentNotificationSettings[key] = false;
-          saveSettings(currentNotificationSettings);
-          showError('O dispositivo não autorizou o agendamento das notificações.');
+          handleSchedulingFailure();
         }
       }, null, { skipPermission: true });
     } catch (error) {
-      console.error('Não foi possível agendar a notificação diária.', error);
-      currentNotificationSettings[key] = false;
-      saveSettings(currentNotificationSettings);
-      showError('Não foi possível agendar a notificação neste dispositivo.');
+      handleSchedulingFailure(error);
     }
   }
 
@@ -316,64 +330,7 @@
         settings[key] = false;
         return;
       }
-      scheduleNotification(localNotifications, key, true);
-    });
-  }
-
-  function compressImage(file) {
-    return new Promise(function (resolve, reject) {
-      var supportedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp'];
-      if (!file || supportedTypes.indexOf(file.type) === -1) {
-        reject(new Error('Selecione uma foto JPEG, PNG, WebP, GIF ou BMP.'));
-        return;
-      }
-      if (file.size > maxPhotoFileSize) {
-        reject(new Error('A foto deve ter no máximo 2 MB.'));
-        return;
-      }
-
-      var reader = new FileReader();
-      reader.onerror = function () {
-        reject(new Error('Não foi possível ler a imagem selecionada.'));
-      };
-      reader.onload = function () {
-        var image = new Image();
-        image.onerror = function () {
-          reject(new Error('O arquivo selecionado não é uma imagem válida.'));
-        };
-        image.onload = function () {
-          if (!image.width || !image.height ||
-              image.width > 8192 || image.height > 8192 ||
-              image.width * image.height > 40000000) {
-            reject(new Error('As dimensões da foto são grandes demais para processar.'));
-            return;
-          }
-          var maxDimension = 1024;
-          var scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
-          var canvas = document.createElement('canvas');
-          canvas.width = Math.max(1, Math.round(image.width * scale));
-          canvas.height = Math.max(1, Math.round(image.height * scale));
-          var context = canvas.getContext('2d');
-          if (!context) {
-            reject(new Error('Não foi possível processar a imagem selecionada.'));
-            return;
-          }
-          context.drawImage(image, 0, 0, canvas.width, canvas.height);
-          var imageData = '';
-          [0.82, 0.72, 0.62, 0.52, 0.42].some(function (quality) {
-            imageData = canvas.toDataURL('image/jpeg', quality);
-            return imageData.length <= maxAvatarDataUrlLength &&
-              isValidAvatar(imageData);
-          });
-          if (!isValidAvatar(imageData)) {
-            reject(new Error('Não foi possível comprimir a foto para menos de 2 MB.'));
-            return;
-          }
-          resolve(imageData);
-        };
-        image.src = String(reader.result);
-      };
-      reader.readAsDataURL(file);
+      scheduleNotification(localNotifications, key, true, checkbox);
     });
   }
 
@@ -410,13 +367,13 @@
         safeData[key] = JSON.stringify(safeTasksByDate);
       } else if (key === profileStorageKey) {
         var profile = JSON.parse(value);
-        if (!profile || typeof profile.name !== 'string' ||
-            typeof profile.avatar !== 'string' || !isValidAvatar(profile.avatar)) {
+        if (!profile || typeof profile.name !== 'string') {
           throw new Error('O perfil no backup está inválido.');
         }
+        var avatar = isValidAvatar(profile.avatar) ? profile.avatar : defaultProfile.avatar;
         safeData[key] = JSON.stringify({
           name: validateText(profile.name, maxProfileNameLength, 'O nome do perfil'),
-          avatar: profile.avatar
+          avatar: avatar
         });
       } else if (key === settingsStorageKey) {
         var settings = JSON.parse(value);
@@ -525,17 +482,16 @@
 
     var profileName = pageRoot.querySelector('.settings-profile-name');
     var profileEditor = pageRoot.querySelector('.settings-profile-editor');
-    var photoInput = pageRoot.querySelector('.settings-photo-input');
     var accountAvatar = pageRoot.querySelector('.settings-account-avatar');
     var profileButton = pageRoot.querySelector('.settings-profile-button');
     var saveProfileButton = pageRoot.querySelector('.settings-save-profile');
-    var changePhotoButton = pageRoot.querySelector('.settings-change-photo');
+    var avatarChoices = pageRoot.querySelectorAll('[data-avatar-choice]');
     var deleteDataButton = pageRoot.querySelector('.settings-delete-data');
     var backupInput = pageRoot.querySelector('.settings-backup-input');
     var exportButton = pageRoot.querySelector('.settings-backup-export');
     var importButton = pageRoot.querySelector('.settings-backup-import');
-    if (!profileName || !profileEditor || !photoInput || !accountAvatar ||
-        !profileButton || !saveProfileButton || !changePhotoButton ||
+    if (!profileName || !profileEditor || !accountAvatar ||
+        !profileButton || !saveProfileButton || !avatarChoices.length ||
         !deleteDataButton || !backupInput || !exportButton || !importButton) {
       throw new Error('Não foi possível inicializar as configurações da conta.');
     }
@@ -543,7 +499,16 @@
     pageRoot.dataset.settingsInitialized = 'true';
     var currentSettings = readSettings();
     currentNotificationSettings = currentSettings;
-    var selectedAvatar = null;
+    var selectedAvatar = defaultProfile.avatar;
+
+    function selectAvatar(avatar) {
+      selectedAvatar = avatar;
+      accountAvatar.src = avatar;
+      avatarChoices.forEach(function (choice) {
+        var isSelected = choice.dataset.avatarChoice === avatar;
+        choice.setAttribute('aria-pressed', String(isSelected));
+      });
+    }
 
     function renderSettings() {
       currentSettings = readSettings();
@@ -558,7 +523,9 @@
       }
       applyTheme(currentSettings.theme);
       applyProfile(pageRoot);
-      profileName.value = readProfile().name;
+      var profile = readProfile();
+      profileName.value = profile.name;
+      selectAvatar(profile.avatar);
     }
 
     pageRoot.addEventListener('settings:refresh', renderSettings);
@@ -584,18 +551,6 @@
         currentSettings.theme = themeChoice.value;
         saveSettings(currentSettings);
         return;
-      }
-
-      if (event.target === photoInput && photoInput.files && photoInput.files[0]) {
-        selectedAvatar = null;
-        compressImage(photoInput.files[0]).then(function (imageData) {
-          selectedAvatar = imageData;
-          accountAvatar.src = imageData;
-        }).catch(function (error) {
-          showError(error.message);
-        }).then(function () {
-          photoInput.value = '';
-        });
       }
 
       if (event.target === backupInput && backupInput.files && backupInput.files[0]) {
@@ -643,12 +598,14 @@
       if (isOpening) {
         var profile = readProfile();
         profileName.value = profile.name;
-        selectedAvatar = null;
+        selectAvatar(profile.avatar);
       }
     });
 
-    changePhotoButton.addEventListener('click', function () {
-      photoInput.click();
+    avatarChoices.forEach(function (choice) {
+      choice.addEventListener('click', function () {
+        selectAvatar(choice.dataset.avatarChoice);
+      });
     });
 
     saveProfileButton.addEventListener('click', function () {
@@ -662,9 +619,7 @@
       }
       var profile = readProfile();
       profile.name = name;
-      if (selectedAvatar) {
-        profile.avatar = selectedAvatar;
-      }
+      profile.avatar = selectedAvatar;
       if (saveProfile(profile)) {
         profileEditor.hidden = true;
         profileButton.setAttribute('aria-expanded', 'false');

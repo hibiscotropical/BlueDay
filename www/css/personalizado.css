@@ -684,7 +684,6 @@ body::-webkit-scrollbar,
 
 .report-empty-state[hidden],
 .report-empty-add-button[hidden],
-.report-page .report-add-button[hidden],
 .report-stats[hidden],
 .report-feedback[hidden] {
     display: none;
@@ -847,6 +846,18 @@ body::-webkit-scrollbar,
     color: #fff;
 }
 
+.report-mood-good {
+    background: #25a86b;
+}
+
+.report-mood-medium {
+    background: #d99b21;
+}
+
+.report-mood-low {
+    background: #c94c55;
+}
+
 .report-mood .mdi {
     font-size: 58px;
     line-height: 1;
@@ -865,17 +876,6 @@ body::-webkit-scrollbar,
     color: #bbccd1;
     font-size: 15px;
     line-height: 21px;
-}
-
-.report-page .report-add-button {
-    right: 20px;
-    bottom: calc(25px + env(safe-area-inset-bottom));
-    width: 70px;
-    height: 70px;
-}
-
-.report-page .report-add-button .mdi {
-    font-size: 34px;
 }
 
 @media (max-width: 360px) {
@@ -1040,7 +1040,47 @@ body::-webkit-scrollbar,
     font: inherit;
 }
 
-.settings-change-photo,
+.settings-avatar-label {
+    color: #c6d9de;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.settings-avatar-options {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.settings-avatar-option {
+    display: grid;
+    min-width: 0;
+    aspect-ratio: 1;
+    place-items: center;
+    padding: 3px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    background: transparent;
+}
+
+.settings-avatar-option[aria-pressed="true"] {
+    border-color: #83d7ef;
+    box-shadow: 0 0 12px rgb(104 211 241 / 45%);
+}
+
+.settings-avatar-option img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.settings-avatar-option:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 3px;
+}
+
 .settings-save-profile,
 .settings-delete-data,
 .settings-backup-export,
@@ -1299,7 +1339,8 @@ body::-webkit-scrollbar,
 
     .app-light-theme .settings-accordion summary > .mdi,
     .app-light-theme .settings-accordion-content,
-    .app-light-theme .settings-profile-editor label {
+    .app-light-theme .settings-profile-editor label,
+    .app-light-theme .settings-avatar-label {
         color: #405563;
     }
 

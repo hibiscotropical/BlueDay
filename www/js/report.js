@@ -21,14 +21,15 @@
     var completedTotal = pageRoot.querySelector('.report-completed-total');
     var progressRing = pageRoot.querySelector('.report-progress-ring');
     var streakCount = pageRoot.querySelector('.report-streak-count');
+    var mood = pageRoot.querySelector('.report-mood');
+    var moodIcon = mood && mood.querySelector('.mdi');
     var performanceTitle = pageRoot.querySelector('.report-performance-title');
     var performanceMessage = pageRoot.querySelector('.report-performance-message');
-    var addButton = pageRoot.querySelector('.report-add-button');
 
     if (!monthTitle || !calendarGrid || !emptyState || !emptyTitle ||
         !emptyMessage || !emptyAddButton || !stats || !feedback || !completedCount ||
         !completedTotal || !progressRing || !streakCount || !performanceTitle ||
-        !performanceMessage || !addButton) {
+        !mood || !moodIcon || !performanceMessage) {
       throw new Error('Não foi possível inicializar os componentes do relatório.');
     }
 
@@ -37,6 +38,7 @@
     var maxTaskTitleLength = 200;
     var today = new Date();
     today.setHours(0, 0, 0, 0);
+    var dayRolloverTimer = null;
     var visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     var selectedDate = new Date(today);
     var tasksByDate = loadReportTasks();
@@ -153,33 +155,59 @@
       return week;
     }
 
-    function getCalendarDayProgress() {
-      var currentMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-
-      if (visibleMonth.getTime() > currentMonthStart.getTime()) {
-        return 0;
-      }
-      if (visibleMonth.getTime() < currentMonthStart.getTime()) {
-        return 6;
-      }
-      return Math.min(today.getDate() + 1, 6);
-    }
-
     function isDayComplete(date) {
       var dayTasks = tasksByDate[getDateKey(date)] || [];
       return dayTasks.length > 0 && dayTasks.every(function (task) { return task.completed; });
     }
 
+    function getCompletedWorkdays(sunday) {
+      if (sunday.getDay() !== 0) {
+        return 0;
+      }
+
+      var monday = new Date(sunday);
+      monday.setDate(monday.getDate() - 6);
+      var completedDays = 0;
+      for (var day = 0; day < 6; day += 1) {
+        var workday = new Date(monday);
+        workday.setDate(monday.getDate() + day);
+        if (workday.getTime() < today.getTime() && isDayComplete(workday)) {
+          completedDays += 1;
+        }
+      }
+      return completedDays;
+    }
+
+    function hasEarnedRestDay(sunday) {
+      return getCompletedWorkdays(sunday) >= 5;
+    }
+
+    function getWeekEndingSunday(date) {
+      var sunday = new Date(date);
+      sunday.setDate(sunday.getDate() + ((7 - sunday.getDay()) % 7));
+      return sunday;
+    }
+
     function getCurrentStreak() {
       var streak = 0;
       var date = new Date(today);
+      date.setDate(date.getDate() - 1);
 
-      if (!isDayComplete(date)) {
-        date.setDate(date.getDate() - 1);
-      }
-
-      while (isDayComplete(date)) {
-        streak += 1;
+      while (true) {
+        if (date.getDay() === 0) {
+          if (hasEarnedRestDay(date)) {
+            date.setDate(date.getDate() - 1);
+            continue;
+          }
+          break;
+        }
+        if (!isDayComplete(date)) {
+          if (!hasEarnedRestDay(getWeekEndingSunday(date))) {
+            break;
+          }
+        } else {
+          streak += 1;
+        }
         date.setDate(date.getDate() - 1);
       }
 
@@ -191,17 +219,45 @@
       var hasMonthTasks = Object.keys(tasksByDate).some(function (dateKey) {
         return dateKey.indexOf(visibleMonthPrefix) === 0 && tasksByDate[dateKey].length > 0;
       });
+      var hasAnyTasks = Object.keys(tasksByDate).some(function (dateKey) {
+        return tasksByDate[dateKey].length > 0;
+      });
+      var completedWeekDays = getCompletedWorkdays(getWeekEndingSunday(today));
+      var completionRate = Math.round((completedWeekDays / 6) * 100);
+      var hasEarnedRestThisWeek = completedWeekDays >= 5;
 
       emptyState.hidden = hasMonthTasks;
       emptyAddButton.hidden = hasMonthTasks;
-      addButton.hidden = !hasMonthTasks;
       stats.hidden = !hasMonthTasks;
-      feedback.hidden = !hasMonthTasks;
+      feedback.hidden = !hasAnyTasks;
+
+      completedCount.textContent = String(completedWeekDays);
+      completedTotal.textContent = '/ 6';
+      progressRing.style.setProperty('--report-progress', completionRate + '%');
+      streakCount.textContent = String(getCurrentStreak());
+
+      mood.classList.remove('report-mood-good', 'report-mood-medium', 'report-mood-low');
+      if (hasEarnedRestThisWeek) {
+        mood.classList.add('report-mood-good');
+        moodIcon.className = 'mdi mdi-emoticon-happy';
+        performanceTitle.textContent = 'Descanso merecido!';
+        performanceMessage.textContent = 'Boa frequência: você concluiu ' + completedWeekDays +
+          ' de 6 dias nesta semana. Aproveite seu descanso: sua sequência está mantida.';
+      } else if (completedWeekDays >= 3) {
+        mood.classList.add('report-mood-medium');
+        moodIcon.className = 'mdi mdi-emoticon-neutral';
+        performanceTitle.textContent = 'Frequência mediana';
+        performanceMessage.textContent = 'Você concluiu ' + completedWeekDays +
+          ' de 6 dias nesta semana. Continue avançando para alcançar uma boa frequência.';
+      } else {
+        mood.classList.add('report-mood-low');
+        moodIcon.className = 'mdi mdi-emoticon-sad';
+        performanceTitle.textContent = 'Frequência baixa';
+        performanceMessage.textContent = 'Você concluiu ' + completedWeekDays +
+          ' de 6 dias nesta semana. Retome suas tarefas para melhorar sua frequência.';
+      }
 
       if (!hasMonthTasks) {
-        var hasAnyTasks = Object.keys(tasksByDate).some(function (dateKey) {
-          return tasksByDate[dateKey].length > 0;
-        });
         emptyTitle.textContent = hasAnyTasks
           ? 'Nenhuma atividade neste mês'
           : 'Seu relatório começa com uma tarefa';
@@ -210,38 +266,37 @@
           : 'Adicione uma tarefa para começar a acompanhar seu progresso e ver seus dados aqui.';
         return;
       }
+    }
 
-      var calendarDayProgress = getCalendarDayProgress();
-      var completedDays = 0;
-
-      for (var day = 1; day <= calendarDayProgress; day += 1) {
-        var date = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day);
-        if (isDayComplete(date)) {
-          completedDays += 1;
-        }
+    function refreshToday() {
+      var currentDate = new Date();
+      currentDate.setHours(0, 0, 0, 0);
+      if (currentDate.getTime() === today.getTime()) {
+        return;
       }
 
-      var completionRate = calendarDayProgress > 0
-        ? Math.round((completedDays / calendarDayProgress) * 100)
-        : 0;
-      completedCount.textContent = String(completedDays);
-      completedTotal.textContent = '/ 6';
-      progressRing.style.setProperty('--report-progress', completionRate + '%');
-      streakCount.textContent = String(getCurrentStreak());
-
-      if (calendarDayProgress === 0) {
-        performanceTitle.textContent = 'Desempenho: Vamos começar!';
-        performanceMessage.textContent = 'Suas atividades deste mês aparecerão aqui. Comece uma tarefa e acompanhe seu progresso.';
-      } else if (completionRate >= 75) {
-        performanceTitle.textContent = 'Desempenho: Excelente!';
-        performanceMessage.textContent = 'Você está em uma ótima sequência e mantendo um bom ritmo neste mês. Continue com o bom trabalho!';
-      } else if (completionRate >= 40) {
-        performanceTitle.textContent = 'Desempenho: Bom trabalho!';
-        performanceMessage.textContent = 'Você está avançando nas suas tarefas. Mantenha a consistência para fortalecer sua sequência.';
-      } else {
-        performanceTitle.textContent = 'Desempenho: Um passo de cada vez!';
-        performanceMessage.textContent = 'Cada tarefa concluída conta. Continue avançando e seu progresso vai crescer ao longo do mês.';
+      var previousToday = today;
+      today = currentDate;
+      if (selectedDate.getTime() === previousToday.getTime()) {
+        selectedDate = new Date(today);
       }
+      if (visibleMonth.getFullYear() === previousToday.getFullYear() &&
+          visibleMonth.getMonth() === previousToday.getMonth()) {
+        visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+      }
+    }
+
+    function scheduleDayRollover() {
+      if (dayRolloverTimer !== null) {
+        window.clearTimeout(dayRolloverTimer);
+      }
+
+      var nextDay = new Date();
+      nextDay.setHours(24, 0, 0, 50);
+      dayRolloverTimer = window.setTimeout(function () {
+        dayRolloverTimer = null;
+        renderReport();
+      }, nextDay.getTime() - Date.now());
     }
 
     function changeMonth(offset) {
@@ -255,6 +310,7 @@
     }
 
     function renderReport(animationDirection) {
+      refreshToday();
       tasksByDate = loadReportTasks();
       monthTitle.textContent = getMonthTitle(visibleMonth);
       calendarGrid.replaceChildren();
@@ -287,6 +343,7 @@
       }
 
       updateSummary();
+      scheduleDayRollover();
 
       if (animationDirection) {
         calendarGrid.classList.remove('report-month-enter-next', 'report-month-enter-previous');
@@ -298,6 +355,13 @@
     }
 
     pageRoot.addEventListener('report:refresh', renderReport);
+    document.addEventListener('visibilitychange', function () {
+      if (document.visibilityState === 'visible') {
+        renderReport();
+      }
+    });
+    window.addEventListener('focus', renderReport);
+    document.addEventListener('resume', renderReport);
     window.addEventListener('storage', function (event) {
       if (event.key && event.key.indexOf(storagePrefix) === 0) {
         renderReport();
@@ -430,7 +494,6 @@
       });
     }
 
-    addButton.addEventListener('click', openAddTaskDialog);
     emptyAddButton.addEventListener('click', openAddTaskDialog);
 
     renderReport();
