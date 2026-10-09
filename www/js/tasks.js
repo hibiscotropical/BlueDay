@@ -513,8 +513,8 @@
       text: 'Escolha como deseja planejar sua tarefa.',
       buttons: [
         { text: 'Cancelar' },
-        { text: 'Tarefa simples', bold: true },
-        { text: 'Tarefa padrão', bold: true }
+        { text: 'simples', bold: true },
+        { text: 'padrão', bold: true }
       ],
       onClick: function (dialog, index) {
         if (index === 1) {
