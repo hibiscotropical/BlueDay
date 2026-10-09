@@ -42,7 +42,6 @@ Esse módulo calcula:
 * dias concluídos na semana;
 * sequência atual de dias com produtividade;
 * feedback visual sobre o desempenho geral;
-* resumo do volume de atividades concluídas em relação ao período analisado.
 
 Essa funcionalidade ajuda a manter uma rotina mais consistente e a identificar padrões de produtividade.
 
@@ -52,7 +51,6 @@ A área de configurações permite:
 
 * escolher um nome de usuário;
 * selecionar um avatar entre opções predefinidas;
-* aplicar um tema claro ou escuro;
 * controlar as notificações do app.
 
 A personalização torna a experiência mais amigável e mantém a aplicação vinculada ao perfil do usuário.
