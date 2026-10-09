@@ -56,6 +56,67 @@
     return title.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim().slice(0, maxTaskTitleLength);
   }
 
+  function sanitizeTaskTime(value) {
+    if (typeof value !== 'string') {
+      return '';
+    }
+
+    var normalized = value.trim().toLowerCase().replace(/\s+/g, '');
+    if (!normalized) {
+      return '';
+    }
+
+    var hours;
+    var minutes = 0;
+
+    if (/^\d{1,2}:\d{2}$/.test(normalized)) {
+      var parts = normalized.split(':');
+      hours = Number(parts[0]);
+      minutes = Number(parts[1]);
+    } else if (/^\d{1,2}[h.]\d{2}$/.test(normalized)) {
+      var dotted = normalized.replace(/h/g, '.');
+      var dotParts = dotted.split('.');
+      hours = Number(dotParts[0]);
+      minutes = Number(dotParts[1]);
+    } else if (/^\d{1,2}h$/.test(normalized) || /^\d{1,2}$/.test(normalized)) {
+      hours = Number(normalized.replace(/h$/, ''));
+    } else if (/^\d{3,4}$/.test(normalized)) {
+      if (normalized.length === 3) {
+        hours = Number(normalized.charAt(0));
+        minutes = Number(normalized.slice(1));
+      } else {
+        hours = Number(normalized.slice(0, 2));
+        minutes = Number(normalized.slice(2));
+      }
+    } else {
+      return '';
+    }
+
+    if (Number.isNaN(hours) || Number.isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+      return '';
+    }
+
+    return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
+  }
+
+  function sortTasks(tasks) {
+    return tasks.slice().sort(function (firstTask, secondTask) {
+      var firstTime = sanitizeTaskTime(firstTask.time);
+      var secondTime = sanitizeTaskTime(secondTask.time);
+
+      if (!firstTime && !secondTime) {
+        return 0;
+      }
+      if (!firstTime) {
+        return 1;
+      }
+      if (!secondTime) {
+        return -1;
+      }
+      return firstTime.localeCompare(secondTime);
+    });
+  }
+
   function loadTasks() {
     var storage;
     var storedByDate = {};
@@ -108,7 +169,7 @@
           return task.completed;
         })) {
           storedByDate[dateKey] = storedByDate[dateKey].map(function (task) {
-            return { title: task.title, completed: false };
+            return { title: task.title, completed: false, time: sanitizeTaskTime(task.time) };
           });
           storage.setItem(storagePrefix + dateKey, JSON.stringify(storedByDate[dateKey]));
         }
@@ -140,14 +201,18 @@
 
     return tasks.map(function (task) {
       if (typeof task === 'string') {
-        return { title: sanitizeTaskTitle(task), completed: false };
+        return { title: sanitizeTaskTitle(task), completed: false, time: '' };
       }
 
       if (!task || typeof task.title !== 'string' || typeof task.completed !== 'boolean') {
         throw new Error('Formato de tarefa inválido.');
       }
 
-      return { title: sanitizeTaskTitle(task.title), completed: task.completed };
+      return {
+        title: sanitizeTaskTitle(task.title),
+        completed: task.completed,
+        time: sanitizeTaskTime(task.time)
+      };
     });
   }
 
@@ -199,7 +264,7 @@
     today.setHours(0, 0, 0, 0);
     var canCompleteTasks = dateKey === getDateKey(today);
     var selectedDayIsFuture = dateKey > getDateKey(today);
-    var tasks = tasksByDate[dateKey] || [];
+    var tasks = sortTasks(tasksByDate[dateKey] || []);
     var hasTasks = tasks.length > 0;
     var pendingTasks = tasks.filter(function (task) { return !task.completed; }).length;
 
@@ -209,7 +274,9 @@
       var completionLabel = document.createElement('label');
       var checkbox = document.createElement('input');
       var checkmark = document.createElement('span');
+      var textContent = document.createElement('div');
       var title = document.createElement('span');
+      var time = document.createElement('span');
       var deleteButton = document.createElement('button');
       var deleteIcon = document.createElement('i');
 
@@ -230,11 +297,19 @@
       }
       checkbox.setAttribute('aria-label', 'Marcar "' + task.title + '" como concluída');
       checkmark.className = 'task-checkmark';
+      textContent.className = 'task-text';
       title.className = 'task-title';
       title.textContent = task.title;
+      time.className = 'task-time';
+      time.textContent = sanitizeTaskTime(task.time);
+      time.hidden = !task.time;
+      textContent.appendChild(title);
+      if (task.time) {
+        textContent.appendChild(time);
+      }
       completionLabel.appendChild(checkbox);
       completionLabel.appendChild(checkmark);
-      completionLabel.appendChild(title);
+      completionLabel.appendChild(textContent);
 
       deleteButton.type = 'button';
       deleteButton.className = 'task-delete-button';
@@ -329,38 +404,74 @@
       return;
     }
 
-    app.dialog.prompt('Digite a tarefa para este dia:', 'Nova tarefa', function (value) {
-      var title = typeof value === 'string'
-        ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim()
-        : '';
+    var taskDialog = app.dialog.create({
+      title: 'Nova tarefa',
+      content: '<div class="task-dialog-content">' +
+        '<div class="task-dialog-field">' +
+        '<label for="task-dialog-title">Tarefa</label>' +
+        '<input id="task-dialog-title" type="text" maxlength="200" placeholder="Digite a tarefa" autocomplete="off" autofocus />' +
+        '</div>' +
+        '<div class="task-dialog-field">' +
+        '<label for="task-dialog-time">Horário</label>' +
+        '<input id="task-dialog-time" type="text" inputmode="numeric" maxlength="5" placeholder="Ex.: 9:30 / 9h30" autocomplete="off" />' +
+        '</div>' +
+        '</div>',
+      buttons: [
+        { text: 'Cancelar' },
+        { text: 'Salvar', bold: true }
+      ],
+      onClick: function (dialog, index) {
+        if (index === 1) {
+          var titleInput = document.getElementById('task-dialog-title');
+          var timeInput = document.getElementById('task-dialog-time');
+          var title = titleInput && titleInput.value ? titleInput.value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim() : '';
+          var time = sanitizeTaskTime(timeInput && timeInput.value ? timeInput.value : '');
 
-      if (!title) {
-        return;
-      }
-      if (title.length > maxTaskTitleLength) {
-        app.dialog.alert('A tarefa deve ter no máximo ' + maxTaskTitleLength + ' caracteres.');
-        return;
-      }
+          if (timeInput && timeInput.value && !time) {
+            app.dialog.alert('O horário deve estar em um formato válido, como 09:30, 9:30, 9h30 ou 930.');
+            return;
+          }
 
-      var currentDate = new Date();
-      currentDate.setHours(0, 0, 0, 0);
-      if (taskDateKey < getDateKey(currentDate)) {
-        app.dialog.alert('Não é possível adicionar tarefas a dias anteriores. Registre as tarefas no dia em que forem realizadas.');
-        return;
-      }
+          if (!title) {
+            app.dialog.alert('Digite o nome da tarefa antes de salvar.');
+            return;
+          }
+          if (title.length > maxTaskTitleLength) {
+            app.dialog.alert('A tarefa deve ter no máximo ' + maxTaskTitleLength + ' caracteres.');
+            return;
+          }
 
-      var dateKey = taskDateKey;
-      var previousTasks = tasksByDate[dateKey];
-      tasksByDate = Object.assign({}, tasksByDate);
-      tasksByDate[dateKey] = (tasksByDate[dateKey] || []).concat({
-        title: title,
-        completed: false
-      });
+          var currentDate = new Date();
+          currentDate.setHours(0, 0, 0, 0);
+          if (taskDateKey < getDateKey(currentDate)) {
+            app.dialog.alert('Não é possível adicionar tarefas a dias anteriores. Registre as tarefas no dia em que forem realizadas.');
+            return;
+          }
 
-      if (saveTasks(dateKey, previousTasks)) {
-        renderCalendar();
+          var dateKey = taskDateKey;
+          var previousTasks = tasksByDate[dateKey];
+          tasksByDate = Object.assign({}, tasksByDate);
+          tasksByDate[dateKey] = sortTasks((tasksByDate[dateKey] || []).concat({
+            title: title,
+            completed: false,
+            time: time
+          }));
+
+          if (saveTasks(dateKey, previousTasks)) {
+            renderCalendar();
+          }
+        }
       }
     });
+
+    taskDialog.open();
+    window.setTimeout(function () {
+      var titleInput = document.getElementById('task-dialog-title');
+      if (titleInput) {
+        titleInput.focus();
+        titleInput.select();
+      }
+    }, 100);
   }
 
   function escapeHtml(value) {
@@ -387,7 +498,11 @@
       Object.keys(tasksByDate).sort().forEach(function (dateKey) {
         tasksByDate[dateKey].forEach(function (task) {
           if (task.title.toLocaleLowerCase('pt-BR').indexOf(query) !== -1) {
-            matchingTasks.push({ dateKey: dateKey, title: task.title });
+            matchingTasks.push({
+              dateKey: dateKey,
+              title: task.title,
+              time: sanitizeTaskTime(task.time)
+            });
           }
         });
       });
@@ -404,11 +519,12 @@
       var resultList = matchingTasks.map(function (match) {
         var parts = match.dateKey.split('-').map(Number);
         var date = new Date(parts[0], parts[1] - 1, parts[2]);
+        var timeLabel = match.time ? ' às ' + match.time : '';
         return '<div>' + formatDate(date, {
           day: '2-digit',
           month: '2-digit',
           year: 'numeric'
-        }) + ' — ' + escapeHtml(match.title) + '</div>';
+        }) + timeLabel + ' — ' + escapeHtml(match.title) + '</div>';
       }).join('');
 
       app.dialog.alert(resultList, 'Tarefas encontradas: ' + matchingTasks.length);
@@ -460,7 +576,7 @@
     tasksByDate = Object.assign({}, tasksByDate);
     tasksByDate[dateKey] = tasksByDate[dateKey].map(function (task, index) {
       return index === taskIndex
-        ? { title: task.title, completed: checkbox.checked }
+        ? { title: task.title, completed: checkbox.checked, time: sanitizeTaskTime(task.time) }
         : task;
     });
 
