@@ -778,7 +778,7 @@
     }
   });
 
-  taskList.addEventListener('click', function (event) {
+taskList.addEventListener('click', function (event) {
     var deleteButton = event.target.closest('.task-delete-button');
     var item = deleteButton && deleteButton.closest('.task-item');
 
@@ -794,36 +794,55 @@
       return;
     }
 
+    var confirmMessage = task.routineId 
+      ? 'Tem certeza de que deseja excluir TODAS as repetições da tarefa padrão "' + escapeHtml(task.title) + '"?'
+      : 'Tem certeza de que deseja excluir a tarefa "' + escapeHtml(task.title) + '"?';
+
     app.dialog.confirm(
-      'Tem certeza de que deseja excluir a tarefa "' + escapeHtml(task.title) + '"?',
+      confirmMessage,
       'Excluir tarefa',
       function () {
         if (task.routineId) {
-          var nextRoutines = recurringTasks.map(function (routine) {
-            if (routine.id !== task.routineId ||
-                routine.skippedDates.indexOf(dateKey) !== -1) {
-              return routine;
-            }
-            return Object.assign({}, routine, {
-              skippedDates: routine.skippedDates.concat(dateKey)
-            });
+          // 1. Remove a rotina do array de tarefas recorrentes
+          var nextRoutines = recurringTasks.filter(function (routine) {
+            return routine.id !== task.routineId;
           });
+          
           if (!saveRecurringTasks(nextRoutines)) {
             return;
           }
-        }
-        var previousTasks = tasksByDate[dateKey];
-        tasksByDate = Object.assign({}, tasksByDate);
-        tasksByDate[dateKey] = tasksByDate[dateKey].filter(function (currentTask, index) {
-          return index !== taskIndex;
-        });
 
-        if (tasksByDate[dateKey].length === 0) {
-          delete tasksByDate[dateKey];
-        }
+          // 2. Remove todas as instâncias geradas dessa rotina no histórico (passado e futuro)
+          Object.keys(tasksByDate).forEach(function (dKey) {
+            tasksByDate[dKey] = tasksByDate[dKey].filter(function (t) {
+              return t.routineId !== task.routineId;
+            });
 
-        if (saveTasks(dateKey, previousTasks)) {
+            if (tasksByDate[dKey].length === 0) {
+              delete tasksByDate[dKey];
+              window.localStorage.removeItem(storagePrefix + dKey);
+            } else {
+              window.localStorage.setItem(storagePrefix + dKey, JSON.stringify(tasksByDate[dKey]));
+            }
+          });
+
           renderTasks();
+
+        } else {
+          // Comportamento original para tarefas simples (apaga apenas 1)
+          var previousTasks = tasksByDate[dateKey];
+          tasksByDate = Object.assign({}, tasksByDate);
+          tasksByDate[dateKey] = tasksByDate[dateKey].filter(function (currentTask, index) {
+            return index !== taskIndex;
+          });
+
+          if (tasksByDate[dateKey].length === 0) {
+            delete tasksByDate[dateKey];
+          }
+
+          if (saveTasks(dateKey, previousTasks)) {
+            renderTasks();
+          }
         }
       }
     );
