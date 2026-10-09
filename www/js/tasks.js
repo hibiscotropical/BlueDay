@@ -7,7 +7,6 @@
     return;
   }
 
-  pageRoot.dataset.taskCalendarInitialized = 'true';
   var storagePrefix = 'day-list-tasks:';
   var legacyStorageKey = 'day-list-tasks';
   var maxTaskTitleLength = 200;
@@ -17,6 +16,7 @@
   var heading = pageRoot.querySelector('.task-day-heading h1');
   var taskCount = pageRoot.querySelector('.task-day-heading p');
   var taskList = pageRoot.querySelector('.task-items');
+  var taskDateNotice = document.createElement('p');
   var emptyState = pageRoot.querySelector('.task-empty-state');
   var addButton = pageRoot.querySelector('.task-add-button');
   var searchButton = pageRoot.querySelector('.task-search');
@@ -26,6 +26,11 @@
     delete pageRoot.dataset.taskCalendarInitialized;
     throw new Error('Os elementos do calendário de tarefas não foram encontrados.');
   }
+
+  taskDateNotice.className = 'task-date-notice';
+  taskDateNotice.setAttribute('role', 'status');
+  taskList.parentNode.insertBefore(taskDateNotice, taskList);
+  pageRoot.dataset.taskCalendarInitialized = 'true';
 
   var selectedDate = new Date();
   selectedDate.setHours(0, 0, 0, 0);
@@ -96,6 +101,18 @@
 
         storage.removeItem(legacyStorageKey);
       }
+
+      var todayKey = getDateKey(new Date());
+      Object.keys(storedByDate).forEach(function (dateKey) {
+        if (dateKey > todayKey && storedByDate[dateKey].some(function (task) {
+          return task.completed;
+        })) {
+          storedByDate[dateKey] = storedByDate[dateKey].map(function (task) {
+            return { title: task.title, completed: false };
+          });
+          storage.setItem(storagePrefix + dateKey, JSON.stringify(storedByDate[dateKey]));
+        }
+      });
 
       return storedByDate;
     } catch (error) {
@@ -178,6 +195,10 @@
 
   function renderTasks() {
     var dateKey = getDateKey(selectedDate);
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    var canCompleteTasks = dateKey === getDateKey(today);
+    var selectedDayIsFuture = dateKey > getDateKey(today);
     var tasks = tasksByDate[dateKey] || [];
     var hasTasks = tasks.length > 0;
     var pendingTasks = tasks.filter(function (task) { return !task.completed; }).length;
@@ -197,9 +218,16 @@
       item.dataset.taskIndex = String(index);
 
       completionLabel.className = 'task-completion';
+      completionLabel.classList.toggle('is-completion-disabled', !canCompleteTasks);
       checkbox.type = 'checkbox';
       checkbox.className = 'task-checkbox';
       checkbox.checked = task.completed;
+      checkbox.disabled = !canCompleteTasks;
+      if (!canCompleteTasks) {
+        checkbox.title = selectedDayIsFuture
+          ? 'Disponível para conclusão neste dia.'
+          : 'Tarefas passadas não podem ser marcadas como concluídas.';
+      }
       checkbox.setAttribute('aria-label', 'Marcar "' + task.title + '" como concluída');
       checkmark.className = 'task-checkmark';
       title.className = 'task-title';
@@ -223,6 +251,10 @@
     taskCount.textContent = pendingTasks === 1
       ? 'Você tem 1 tarefa pendente'
       : 'Você tem ' + pendingTasks + ' tarefas pendentes';
+    taskDateNotice.hidden = canCompleteTasks;
+    taskDateNotice.textContent = selectedDayIsFuture
+      ? 'Você pode planejar tarefas para este dia, mas só poderá marcá-las como concluídas quando ele chegar.'
+      : 'Tarefas de dias anteriores não podem ser marcadas como concluídas.';
     emptyState.hidden = hasTasks;
   }
 
@@ -289,6 +321,14 @@
   }
 
   function addTask() {
+    var taskDateKey = getDateKey(selectedDate);
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (taskDateKey < getDateKey(today)) {
+      app.dialog.alert('Não é possível adicionar tarefas a dias anteriores. Registre as tarefas no dia em que forem realizadas.');
+      return;
+    }
+
     app.dialog.prompt('Digite a tarefa para este dia:', 'Nova tarefa', function (value) {
       var title = typeof value === 'string'
         ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim()
@@ -302,7 +342,14 @@
         return;
       }
 
-      var dateKey = getDateKey(selectedDate);
+      var currentDate = new Date();
+      currentDate.setHours(0, 0, 0, 0);
+      if (taskDateKey < getDateKey(currentDate)) {
+        app.dialog.alert('Não é possível adicionar tarefas a dias anteriores. Registre as tarefas no dia em que forem realizadas.');
+        return;
+      }
+
+      var dateKey = taskDateKey;
       var previousTasks = tasksByDate[dateKey];
       tasksByDate = Object.assign({}, tasksByDate);
       tasksByDate[dateKey] = (tasksByDate[dateKey] || []).concat({
@@ -400,6 +447,14 @@
     }
 
     var dateKey = getDateKey(selectedDate);
+    var today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (dateKey !== getDateKey(today)) {
+      app.dialog.alert('As tarefas só podem ser marcadas como concluídas no dia atual.');
+      renderTasks();
+      return;
+    }
+
     var taskIndex = Number(item.dataset.taskIndex);
     var previousTasks = tasksByDate[dateKey];
     tasksByDate = Object.assign({}, tasksByDate);

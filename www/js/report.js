@@ -42,6 +42,7 @@
     var visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     var selectedDate = new Date(today);
     var tasksByDate = loadReportTasks();
+    var activityStartDate = getActivityStartDate();
 
     function padNumber(number) {
       return String(number).padStart(2, '0');
@@ -49,6 +50,23 @@
 
     function getDateKey(date) {
       return date.getFullYear() + '-' + padNumber(date.getMonth() + 1) + '-' + padNumber(date.getDate());
+    }
+
+    function getActivityStartDate() {
+      var firstDateKey = Object.keys(tasksByDate).filter(function (dateKey) {
+        if (dateKey > getDateKey(today) || !tasksByDate[dateKey].length) {
+          return false;
+        }
+        var parts = dateKey.split('-').map(Number);
+        var date = new Date(parts[0], parts[1] - 1, parts[2]);
+        return getDateKey(date) === dateKey;
+      }).sort()[0];
+
+      if (!firstDateKey) {
+        return new Date(today);
+      }
+      var parts = firstDateKey.split('-').map(Number);
+      return new Date(parts[0], parts[1] - 1, parts[2]);
     }
 
     function getMonthTitle(date) {
@@ -63,6 +81,8 @@
 
     function loadReportTasks() {
       var tasks = {};
+      var changedFutureTasks = false;
+      var todayKey = getDateKey(today);
 
       try {
         for (var index = 0; index < window.localStorage.length; index += 1) {
@@ -77,6 +97,7 @@
             continue;
           }
 
+          var changedDay = false;
           tasks[dateKey] = entries.map(function (entry) {
             if (typeof entry === 'string') {
               return { title: sanitizeTaskTitle(entry), completed: false };
@@ -84,20 +105,36 @@
             if (!entry || typeof entry.title !== 'string' || typeof entry.completed !== 'boolean') {
               throw new Error('Os dados de uma tarefa não são válidos.');
             }
-            return { title: sanitizeTaskTitle(entry.title), completed: entry.completed };
+            var completed = entry.completed && dateKey <= todayKey;
+            if (entry.completed && !completed) {
+              changedFutureTasks = true;
+              changedDay = true;
+            }
+            return { title: sanitizeTaskTitle(entry.title), completed: completed };
           });
+          if (changedDay) {
+            window.localStorage.setItem(key, JSON.stringify(tasks[dateKey]));
+          }
         }
       } catch (error) {
         app.dialog.alert('Não foi possível carregar os dados do relatório salvos neste dispositivo.');
       }
 
+      if (changedFutureTasks) {
+        window.document.querySelectorAll('.task-page').forEach(function (taskPage) {
+          taskPage.dispatchEvent(new Event('tasks:refresh'));
+        });
+      }
       return tasks;
     }
 
     function getDayStatus(date) {
       var dateKey = getDateKey(date);
+      if (dateKey > getDateKey(today)) {
+        return '';
+      }
       var dayTasks = tasksByDate[dateKey] || [];
-      if (dayTasks.length > 0 && dayTasks.every(function (task) { return task.completed; })) {
+      if (isDayComplete(date)) {
         return 'is-completed';
       }
       if (dayTasks.length > 0) {
@@ -131,16 +168,48 @@
         button.classList.add('is-elapsed');
       }
       button.textContent = String(date.getDate());
+      var nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+      if (isDayComplete(date) && isDayComplete(nextDate)) {
+        var streakConnector = document.createElement('span');
+        streakConnector.className = 'report-day-streak-connector';
+        streakConnector.setAttribute('aria-hidden', 'true');
+        button.appendChild(streakConnector);
+      }
+      if (isDayComplete(date)) {
+        var fireIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        fireIcon.setAttribute('class', 'report-day-streak-icon');
+        fireIcon.setAttribute('viewBox', '0 0 24 24');
+        fireIcon.setAttribute('aria-hidden', 'true');
+        var iconBacking = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        iconBacking.setAttribute('cx', '12');
+        iconBacking.setAttribute('cy', '12');
+        iconBacking.setAttribute('r', '11');
+        iconBacking.setAttribute('fill', '#123b46');
+        iconBacking.setAttribute('stroke', '#ffffff');
+        iconBacking.setAttribute('stroke-width', '1.25');
+        fireIcon.appendChild(iconBacking);
+
+        var flame = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        flame.setAttribute('fill', '#ff6b1a');
+        flame.setAttribute('stroke', '#762900');
+        flame.setAttribute('stroke-width', '0.7');
+        flame.setAttribute('stroke-linejoin', 'round');
+        flame.setAttribute('d', 'M12 3c.55 3.1-.62 5.28-2.44 7.42C8.18 12.05 7 13.5 7 15.2a5 5 0 0 0 10 0c0-2.56-1.36-4.57-3.34-6.82C13.37 8.06 12.44 5.06 12 3Z');
+        fireIcon.appendChild(flame);
+
+        var innerFlame = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        innerFlame.setAttribute('fill', '#ffd166');
+        innerFlame.setAttribute('d', 'M12.12 12.1c-.12 1.45-.7 2.37-1.45 3.28-.44.54-.67.99-.67 1.47a2.02 2.02 0 0 0 4.04 0c0-.97-.48-1.77-1.27-2.68-.36-.42-.56-1.2-.65-2.07Z');
+        fireIcon.appendChild(innerFlame);
+        button.appendChild(fireIcon);
+      }
       return button;
     }
 
     function createWeek(dates) {
       var week = document.createElement('div');
       week.className = 'report-week';
-      if (dates.some(function (date) { return date && getDayStatus(date) === 'is-completed'; })) {
-        week.classList.add('has-completed');
-      }
-
       dates.forEach(function (date) {
         if (date) {
           week.appendChild(createDayButton(date));
@@ -156,7 +225,12 @@
     }
 
     function isDayComplete(date) {
-      var dayTasks = tasksByDate[getDateKey(date)] || [];
+      var dateKey = getDateKey(date);
+      if (dateKey < getDateKey(activityStartDate) ||
+          dateKey > getDateKey(today)) {
+        return false;
+      }
+      var dayTasks = tasksByDate[dateKey] || [];
       return dayTasks.length > 0 && dayTasks.every(function (task) { return task.completed; });
     }
 
@@ -211,7 +285,7 @@
       var date = new Date(today);
       date.setDate(date.getDate() - 1);
 
-      while (true) {
+      while (date.getTime() >= activityStartDate.getTime()) {
         if (date.getDay() === 0) {
           if (hasEarnedRestDay(date)) {
             date.setDate(date.getDate() - 1);
@@ -341,6 +415,7 @@
     function renderReport(animationDirection) {
       refreshToday();
       tasksByDate = loadReportTasks();
+      activityStartDate = getActivityStartDate();
       monthTitle.textContent = getMonthTitle(visibleMonth);
       calendarGrid.replaceChildren();
 
@@ -494,6 +569,11 @@
 
     function openAddTaskDialog(event) {
       event.preventDefault();
+      var taskDateKey = getDateKey(selectedDate);
+      if (taskDateKey < getDateKey(today)) {
+        app.dialog.alert('Não é possível adicionar tarefas a dias anteriores. Registre as tarefas no dia em que forem realizadas.');
+        return;
+      }
       app.dialog.prompt('Digite a tarefa para este dia:', 'Nova tarefa', function (value) {
         var title = typeof value === 'string'
           ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim()
@@ -506,7 +586,14 @@
           return;
         }
 
-        var dateKey = getDateKey(selectedDate);
+        var currentDate = new Date();
+        currentDate.setHours(0, 0, 0, 0);
+        if (taskDateKey < getDateKey(currentDate)) {
+          app.dialog.alert('Não é possível adicionar tarefas a dias anteriores. Registre as tarefas no dia em que forem realizadas.');
+          return;
+        }
+
+        var dateKey = taskDateKey;
         var dayStorageKey = storagePrefix + dateKey;
         var previousTasks = tasksByDate[dateKey] || [];
         var nextTasks = previousTasks.concat({ title: title, completed: false });

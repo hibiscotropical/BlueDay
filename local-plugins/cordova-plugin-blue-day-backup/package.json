@@ -1,0 +1,11 @@
+{
+  "name": "cordova-plugin-blue-day-backup",
+  "version": "1.0.0",
+  "description": "Saves Blue Day encrypted backups to the Android Downloads folder.",
+  "cordova": {
+    "id": "cordova-plugin-blue-day-backup",
+    "platforms": [
+      "android"
+    ]
+  }
+}

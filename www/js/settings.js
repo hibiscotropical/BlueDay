@@ -6,6 +6,7 @@
   var maxProfileNameLength = 60;
   var maxTaskTitleLength = 200;
   var maxBackupFileSize = 10 * 1024 * 1024;
+  var backupKdfIterations = 600000;
   var avatarOptions = [
     'img/avatar-gato.png',
     'img/avatar-raposa.png',
@@ -182,6 +183,164 @@
     });
   }
 
+  function getTopFrequentTaskTitles() {
+    var snapshot = getAppStorageSnapshot();
+    var tasksByDate = {};
+    var dailyTaskKeys = Object.keys(snapshot).filter(function (key) {
+      return key.indexOf(taskStoragePrefix) === 0;
+    });
+
+    dailyTaskKeys.forEach(function (key) {
+      var dateKey = key.slice(taskStoragePrefix.length);
+      if (!isValidDateKey(dateKey)) {
+        return;
+      }
+      tasksByDate[dateKey] = validateTaskList(JSON.parse(snapshot[key]));
+    });
+
+    if (snapshot[legacyTaskStorageKey]) {
+      var legacyTasks = JSON.parse(snapshot[legacyTaskStorageKey]);
+      if (!legacyTasks || typeof legacyTasks !== 'object' || Array.isArray(legacyTasks)) {
+        throw new Error('As tarefas salvas neste dispositivo estão inválidas.');
+      }
+      Object.keys(legacyTasks).forEach(function (dateKey) {
+        if (!isValidDateKey(dateKey)) {
+          return;
+        }
+        if (!Object.prototype.hasOwnProperty.call(tasksByDate, dateKey)) {
+          tasksByDate[dateKey] = validateTaskList(legacyTasks[dateKey]);
+        }
+      });
+    }
+
+    var frequencyByTitle = {};
+    Object.keys(tasksByDate).sort().forEach(function (dateKey) {
+      tasksByDate[dateKey].forEach(function (task) {
+        var normalizedTitle = task.title.toLocaleLowerCase('pt-BR');
+        if (!Object.prototype.hasOwnProperty.call(frequencyByTitle, normalizedTitle)) {
+          frequencyByTitle[normalizedTitle] = { title: task.title, count: 0 };
+        }
+        frequencyByTitle[normalizedTitle].count += 1;
+      });
+    });
+
+    return Object.keys(frequencyByTitle).map(function (key) {
+      return frequencyByTitle[key];
+    }).sort(function (first, second) {
+      return second.count - first.count || first.title.localeCompare(second.title, 'pt-BR');
+    }).slice(0, 3);
+  }
+
+  function getCryptoApi() {
+    if (!window.crypto || !window.crypto.subtle ||
+        typeof window.crypto.getRandomValues !== 'function' ||
+        typeof window.TextEncoder !== 'function' ||
+        typeof window.TextDecoder !== 'function') {
+      throw new Error('Este dispositivo não oferece suporte à Web Crypto API necessária para proteger o backup.');
+    }
+    return window.crypto;
+  }
+
+  function bytesToBase64(bytes) {
+    var binary = '';
+    for (var offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(offset, offset + 0x8000));
+    }
+    return window.btoa(binary);
+  }
+
+  function base64ToBytes(value) {
+    if (typeof value !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
+      throw new Error('O arquivo de backup criptografado está inválido.');
+    }
+    var binary = window.atob(value);
+    var bytes = new Uint8Array(binary.length);
+    for (var index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return bytes;
+  }
+
+  function deriveBackupKey(password, salt) {
+    var cryptoApi = getCryptoApi();
+    var encoder = new window.TextEncoder();
+    return cryptoApi.subtle.importKey(
+      'raw',
+      encoder.encode(password),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    ).then(function (passwordKey) {
+      return cryptoApi.subtle.deriveKey(
+        {
+          name: 'PBKDF2',
+          salt: salt,
+          iterations: backupKdfIterations,
+          hash: 'SHA-256'
+        },
+        passwordKey,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+      );
+    });
+  }
+
+  function encryptBackup(backup, password) {
+    var cryptoApi = getCryptoApi();
+    var encoder = new window.TextEncoder();
+    var salt = cryptoApi.getRandomValues(new Uint8Array(16));
+    var iv = cryptoApi.getRandomValues(new Uint8Array(12));
+    var plaintext = encoder.encode(JSON.stringify(backup));
+    return deriveBackupKey(password, salt).then(function (key) {
+      return cryptoApi.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, plaintext);
+    }).then(function (ciphertext) {
+      return {
+        format: 'day-list-backup',
+        version: 2,
+        createdAt: backup.createdAt,
+        encryption: {
+          algorithm: 'AES-GCM',
+          keyDerivation: 'PBKDF2-SHA-256',
+          iterations: backupKdfIterations,
+          salt: bytesToBase64(salt),
+          iv: bytesToBase64(iv)
+        },
+        data: bytesToBase64(new Uint8Array(ciphertext))
+      };
+    });
+  }
+
+  function decryptBackup(backup, password) {
+    if (!backup || backup.format !== 'day-list-backup' || backup.version !== 2 ||
+        !backup.encryption || backup.encryption.algorithm !== 'AES-GCM' ||
+        backup.encryption.keyDerivation !== 'PBKDF2-SHA-256' ||
+        backup.encryption.iterations !== backupKdfIterations) {
+      throw new Error('O arquivo selecionado não é um backup criptografado compatível.');
+    }
+    if (typeof password !== 'string' || !password) {
+      throw new Error('Digite a senha escolhida ao exportar este backup.');
+    }
+
+    var salt = base64ToBytes(backup.encryption.salt);
+    var iv = base64ToBytes(backup.encryption.iv);
+    var ciphertext = base64ToBytes(backup.data);
+    if (salt.length !== 16 || iv.length !== 12 || ciphertext.length < 16 ||
+        ciphertext.length > maxBackupFileSize) {
+      throw new Error('O arquivo de backup criptografado está inválido.');
+    }
+
+    var cryptoApi = getCryptoApi();
+    return deriveBackupKey(password, salt).then(function (key) {
+      return cryptoApi.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, ciphertext);
+    }).catch(function () {
+      throw new Error('Senha incorreta ou arquivo de backup danificado.');
+    }).then(function (plaintext) {
+      var decoded = new window.TextDecoder().decode(plaintext);
+      return validateBackup(JSON.parse(decoded));
+    });
+  }
+
   function notifyViewsOfDataChange() {
     applyProfile();
     window.document.querySelectorAll('.report-page').forEach(function (page) {
@@ -217,7 +376,7 @@
     var localNotifications = window.cordova && window.cordova.plugins &&
       window.cordova.plugins.notification && window.cordova.plugins.notification.local;
     if (localNotifications) {
-      localNotifications.cancel([4101, 4102]);
+      localNotifications.cancel([4101, 4102, 4103]);
     }
     applyTheme('dark');
     notifyViewsOfDataChange();
@@ -297,15 +456,92 @@
         id: notification.id,
         title: notification.title,
         text: notification.text,
-        trigger: { every: { hour: notification.hour, minute: 0 } }
+        trigger: { every: { hour: notification.hour, minute: 0 } },
+        androidAllowWhileIdle: true
       }, function (result) {
         if (result === false) {
           handleSchedulingFailure();
+          return;
         }
+        localNotifications.isScheduled(notification.id, function (scheduled) {
+          if (!scheduled) {
+            handleSchedulingFailure(new Error('O Android não confirmou o agendamento da notificação.'));
+          }
+        });
       }, null, { skipPermission: true });
     } catch (error) {
       handleSchedulingFailure(error);
     }
+  }
+
+  function testLocalNotification(statusElement) {
+    var localNotifications = window.cordova && window.cordova.plugins &&
+      window.cordova.plugins.notification && window.cordova.plugins.notification.local;
+
+    statusElement.textContent = '';
+    if (!localNotifications) {
+      showError('O teste de notificações só funciona no aplicativo Android instalado.');
+      return;
+    }
+
+    requestNotificationPermission(function (granted) {
+      if (!granted) {
+        showError('A permissão para notificações não foi concedida. Autorize-a nas configurações do dispositivo e tente novamente.');
+        return;
+      }
+
+      try {
+        localNotifications.cancel(4103);
+        localNotifications.schedule({
+          id: 4103,
+          title: 'Teste do Blue Day',
+          text: 'As notificações do aplicativo estão funcionando.',
+          trigger: { in: 5, unit: 'second' },
+          androidAllowWhileIdle: true
+        }, function (result) {
+          if (result === false) {
+            showError('O Android não conseguiu agendar a notificação de teste.');
+            return;
+          }
+          localNotifications.isScheduled(4103, function (scheduled) {
+            if (!scheduled) {
+              showError('O Android não confirmou o agendamento da notificação de teste.');
+              return;
+            }
+            statusElement.textContent = 'Teste agendado. A notificação deve aparecer em até 5 segundos.';
+          });
+        }, null, { skipPermission: true });
+      } catch (error) {
+        console.error('Não foi possível agendar a notificação de teste.', error);
+        showError('Não foi possível agendar a notificação de teste neste dispositivo.');
+      }
+    });
+  }
+
+  function restoreEnabledNotifications() {
+    var settings = readSettings();
+    if (!settings.taskReminders && !settings.dailySummary) {
+      return;
+    }
+
+    var localNotifications = window.cordova && window.cordova.plugins &&
+      window.cordova.plugins.notification && window.cordova.plugins.notification.local;
+    if (!localNotifications || typeof localNotifications.hasPermission !== 'function') {
+      return;
+    }
+
+    localNotifications.hasPermission(function (granted) {
+      if (!granted) {
+        return;
+      }
+      currentNotificationSettings = settings;
+      if (settings.taskReminders) {
+        scheduleNotification(localNotifications, 'taskReminders', true);
+      }
+      if (settings.dailySummary) {
+        scheduleNotification(localNotifications, 'dailySummary', true);
+      }
+    });
   }
 
   var currentNotificationSettings = defaultSettings;
@@ -395,6 +631,29 @@
     return safeData;
   }
 
+  function downloadBackupFile(blob) {
+    var url = URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = 'day-list-backup.enc';
+    link.click();
+    window.setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 1000);
+  }
+
+  function saveBackupToAndroid(contents) {
+    if (!window.BlueDayBackup || typeof window.BlueDayBackup.save !== 'function') {
+      return Promise.reject(new Error('O recurso para salvar backups em Downloads não está instalado. Atualize o aplicativo.'));
+    }
+
+    var timestamp = new Date().toISOString().replace(/[^0-9T-]/g, '');
+    var fileName = 'day-list-backup-' + timestamp + '.enc';
+    return new Promise(function (resolve, reject) {
+      window.BlueDayBackup.save(contents, fileName, resolve, reject);
+    });
+  }
+
   function restoreBackup(data) {
     var previousData;
     try {
@@ -430,9 +689,17 @@
     return true;
   }
 
-  function exportBackup() {
+  function exportBackup(passwordInput) {
     var backup;
+    var password = passwordInput ? passwordInput.value.trim() : '';
     try {
+      var topTitles = getTopFrequentTaskTitles();
+      if (!topTitles.length) {
+        throw new Error('Adicione pelo menos uma tarefa antes de criar um backup protegido por senha.');
+      }
+      if (topTitles.every(function (task) { return task.title !== password.trim(); })) {
+        throw new Error('A senha deve ser exatamente um dos três títulos de tarefa mais frequentes exibidos nesta seção.');
+      }
       backup = {
         format: 'day-list-backup',
         version: 1,
@@ -440,35 +707,49 @@
         data: getAppStorageSnapshot()
       };
     } catch (error) {
-      showError('Não foi possível acessar os dados para criar o backup.');
-      return;
-    }
-    var blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
-    if (blob.size > maxBackupFileSize) {
-      showError('O backup gerado excede o limite de 10 MB. Reduza os dados salvos e tente novamente.');
-      return;
-    }
-
-    if (typeof File === 'function' && navigator.canShare && navigator.share) {
-      var file = new File([blob], 'day-list-backup.json', { type: 'application/json' });
-      if (navigator.canShare({ files: [file] })) {
-        navigator.share({ title: 'Backup da Lista de Tarefas', files: [file] }).catch(function (error) {
-          if (error.name !== 'AbortError') {
-            showError('Não foi possível compartilhar o arquivo de backup.');
-          }
-        });
-        return;
+      showError(error.message || 'Não foi possível acessar os dados para criar o backup.');
+      if (passwordInput) {
+        passwordInput.value = '';
       }
+      return;
     }
+    Promise.resolve().then(function () {
+      return encryptBackup(backup, password);
+    }).then(function (encryptedBackup) {
+      var backupContents = JSON.stringify(encryptedBackup, null, 2);
+      var blob = new Blob([backupContents], { type: 'application/octet-stream' });
+      if (blob.size > maxBackupFileSize) {
+        throw new Error('O backup gerado excede o limite de 10 MB. Reduza os dados salvos e tente novamente.');
+      }
 
-    var url = URL.createObjectURL(blob);
-    var link = document.createElement('a');
-    link.href = url;
-    link.download = 'day-list-backup.json';
-    link.click();
-    window.setTimeout(function () {
-      URL.revokeObjectURL(url);
-    }, 1000);
+      if (window.cordova && window.cordova.platformId === 'android') {
+        return saveBackupToAndroid(backupContents).then(function (savedPath) {
+          showError('Backup salvo em ' + savedPath + '.');
+        });
+      }
+
+      if (typeof File === 'function' && navigator.canShare && navigator.share) {
+        var file = new File([blob], 'day-list-backup.enc', { type: 'application/octet-stream' });
+        if (navigator.canShare({ files: [file] })) {
+          return navigator.share({ title: 'Backup da Lista de Tarefas', files: [file] }).catch(function (error) {
+            if (error.name === 'AbortError') {
+              return;
+            }
+            downloadBackupFile(blob);
+          });
+        }
+      }
+
+      downloadBackupFile(blob);
+    }).catch(function (error) {
+      if (error.name !== 'AbortError') {
+        showError(error.message || 'Não foi possível criptografar o backup.');
+      }
+    }).then(function () {
+      if (passwordInput) {
+        passwordInput.value = '';
+      }
+    });
   }
 
   function initializeSettings(pageElement) {
@@ -490,9 +771,15 @@
     var backupInput = pageRoot.querySelector('.settings-backup-input');
     var exportButton = pageRoot.querySelector('.settings-backup-export');
     var importButton = pageRoot.querySelector('.settings-backup-import');
+    var backupPassword = pageRoot.querySelector('.settings-backup-password');
+    var backupPasswordHint = pageRoot.querySelector('.settings-backup-password-hint');
+    var notificationTestButton = pageRoot.querySelector('.settings-notification-test');
+    var notificationTestStatus = pageRoot.querySelector('.settings-notification-test-status');
     if (!profileName || !profileEditor || !accountAvatar ||
         !profileButton || !saveProfileButton || !avatarChoices.length ||
-        !deleteDataButton || !backupInput || !exportButton || !importButton) {
+        !deleteDataButton || !backupInput || !exportButton || !importButton ||
+        !backupPassword || !backupPasswordHint || !notificationTestButton ||
+        !notificationTestStatus) {
       throw new Error('Não foi possível inicializar as configurações da conta.');
     }
 
@@ -526,9 +813,75 @@
       var profile = readProfile();
       profileName.value = profile.name;
       selectAvatar(profile.avatar);
+      try {
+        var frequentTasks = getTopFrequentTaskTitles();
+        backupPasswordHint.textContent = frequentTasks.length
+          ? 'Senhas permitidas: ' + frequentTasks.map(function (task) {
+            return '“' + task.title + '” (' + task.count + 'x)';
+          }).join(', ') + '.'
+          : 'Adicione pelo menos uma tarefa para definir uma senha de backup.';
+      } catch (error) {
+        backupPasswordHint.textContent = 'Não foi possível ler as tarefas frequentes para definir a senha.';
+        console.error('Não foi possível calcular as tarefas mais frequentes para o backup.', error);
+      }
+    }
+
+    function clearBackupImportState() {
+      backupInput.value = '';
+      backupPassword.value = '';
+    }
+
+    function confirmBackupRestore(validatedData) {
+      app.dialog.confirm(
+        'A restauração substituirá tarefas, configurações e perfil salvos neste dispositivo.',
+        'Restaurar backup',
+        function () {
+          if (restoreBackup(validatedData)) {
+            showError('O backup foi restaurado.');
+          }
+          clearBackupImportState();
+        },
+        clearBackupImportState
+      );
+    }
+
+    function requestEncryptedBackupPassword(encryptedBackup) {
+      var passwordDialog = app.dialog.prompt(
+        'Digite a senha usada ao exportar este backup.',
+        'Senha do backup',
+        function (password) {
+          Promise.resolve().then(function () {
+            return decryptBackup(encryptedBackup, password);
+          }).then(function (validatedData) {
+            confirmBackupRestore(validatedData);
+          }).catch(function (error) {
+            showError(error.message || 'Não foi possível descriptografar ou validar o backup.');
+            clearBackupImportState();
+          });
+        },
+        clearBackupImportState
+      );
+      var passwordField = passwordDialog && passwordDialog.$el &&
+        passwordDialog.$el.find('input');
+      if (passwordField && passwordField.length) {
+        passwordField.addClass('settings-backup-password-prompt');
+        passwordField.attr('type', 'password');
+        passwordField.attr('autocomplete', 'off');
+        passwordField.attr('autocapitalize', 'off');
+        passwordField.attr('placeholder', 'Senha do backup');
+        passwordField.focus();
+      } else {
+        console.error('O modal de senha não disponibilizou um campo de entrada.');
+        clearBackupImportState();
+        showError('Não foi possível abrir o campo da senha do backup neste dispositivo.');
+      }
     }
 
     pageRoot.addEventListener('settings:refresh', renderSettings);
+    notificationTestButton.addEventListener('click', function () {
+      testLocalNotification(notificationTestStatus);
+    });
+
     pageRoot.addEventListener('change', function (event) {
       var checkbox = event.target.closest('[data-notification-setting]');
       if (checkbox) {
@@ -562,35 +915,35 @@
         var reader = new FileReader();
         reader.onerror = function () {
           showError('Não foi possível ler o arquivo de backup.');
-          backupInput.value = '';
+          clearBackupImportState();
         };
         reader.onload = function () {
-          var safeData;
+          var parsedBackup;
           try {
-            safeData = validateBackup(JSON.parse(String(reader.result)));
+            parsedBackup = JSON.parse(String(reader.result));
           } catch (error) {
             showError(error.message || 'O arquivo de backup é inválido.');
-            backupInput.value = '';
+            clearBackupImportState();
             return;
           }
-          app.dialog.confirm(
-            'A restauração substituirá tarefas, configurações e perfil salvos neste dispositivo.',
-            'Restaurar backup',
-            function () {
-              if (restoreBackup(safeData)) {
-                showError('O backup foi restaurado.');
-              }
-              backupInput.value = '';
-            },
-            function () {
-              backupInput.value = '';
-            }
-          );
+          if (parsedBackup && parsedBackup.version === 2) {
+            requestEncryptedBackupPassword(parsedBackup);
+            return;
+          }
+          try {
+            confirmBackupRestore(validateBackup(parsedBackup));
+          } catch (error) {
+            showError(error.message || 'O arquivo de backup é inválido.');
+            clearBackupImportState();
+          }
         };
         reader.readAsText(backupInput.files[0]);
       }
     });
 
+    exportButton.addEventListener('click', function () {
+      exportBackup(backupPassword);
+    });
     profileButton.addEventListener('click', function () {
       var isOpening = profileEditor.hidden;
       profileEditor.hidden = !isOpening;
@@ -634,7 +987,6 @@
       );
     });
 
-    exportButton.addEventListener('click', exportBackup);
     importButton.addEventListener('click', function () {
       backupInput.click();
     });
@@ -652,6 +1004,8 @@
     }
   };
   window.initializeSettings = initializeSettings;
+  window.addEventListener('deviceready', restoreEnabledNotifications, false);
+  document.addEventListener('resume', restoreEnabledNotifications, false);
 
   window.addEventListener('storage', function (event) {
     if (event.key === profileStorageKey) {

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0"
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    id="cordova-plugin-blue-day-backup" version="1.0.0">
+    <name>Blue Day Backup</name>
+    <js-module src="www/BlueDayBackup.js" name="BlueDayBackup">
+        <clobbers target="window.BlueDayBackup" />
+    </js-module>
+    <platform name="android">
+        <config-file target="res/xml/config.xml" parent="/*">
+            <feature name="BlueDayBackup">
+                <param name="android-package" value="br.com.daylist.backup.BlueDayBackupPlugin" />
+            </feature>
+        </config-file>
+        <config-file target="AndroidManifest.xml" parent="/manifest">
+            <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+                android:maxSdkVersion="28" />
+        </config-file>
+        <source-file src="src/android/BlueDayBackupPlugin.java"
+            target-dir="src/br/com/daylist/backup" />
+    </platform>
+</plugin>

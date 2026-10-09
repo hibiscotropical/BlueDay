@@ -283,6 +283,13 @@ body::-webkit-scrollbar,
     font-weight: 600;
 }
 
+.task-date-notice {
+    margin: 12px 0 -6px;
+    color: #ffd28a;
+    font-size: 13px;
+    line-height: 18px;
+}
+
 .task-items {
     display: flex;
     flex-direction: column;
@@ -313,6 +320,20 @@ body::-webkit-scrollbar,
     align-items: center;
     gap: 10px;
     cursor: pointer;
+}
+
+.task-completion.is-completion-disabled {
+    cursor: not-allowed;
+}
+
+.task-completion.is-completion-disabled .task-checkmark {
+    border-color: #59616f;
+    background: #252c38;
+    color: #aab2c0;
+}
+
+.task-completion.is-completion-disabled .task-title {
+    color: #aab2c0;
 }
 
 .task-checkbox {
@@ -593,27 +614,23 @@ body::-webkit-scrollbar,
 }
 
 .report-week {
+    --report-day-gap: 7px;
     position: relative;
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 7px;
+    gap: var(--report-day-gap);
 }
 
-.report-week::before {
+.report-day-streak-connector {
     position: absolute;
     z-index: 0;
     top: 50%;
-    right: 4%;
-    left: 4%;
+    left: 50%;
+    width: calc(100% + var(--report-day-gap));
     height: 4px;
     transform: translateY(-50%);
     background: #2874f0;
-    content: "";
-    opacity: 0;
-}
-
-.report-week.has-completed::before {
-    opacity: 0.85;
+    pointer-events: none;
 }
 
 .report-day,
@@ -637,11 +654,24 @@ body::-webkit-scrollbar,
     font-size: 18px;
     font-weight: 700;
     text-shadow: 0 1px 2px rgb(0 0 0 / 28%);
+    isolation: isolate;
 }
 
 .report-day.is-completed {
     background: #2d73ec;
     color: #fff;
+}
+
+.report-day-streak-icon {
+    position: absolute;
+    z-index: 2;
+    top: -5px;
+    right: -5px;
+    display: block;
+    width: 20px;
+    height: 20px;
+    filter: drop-shadow(0 1px 1px rgb(0 0 0 / 75%));
+    pointer-events: none;
 }
 
 .report-day.is-elapsed:not(.is-completed):not(.has-pending) {
@@ -889,7 +919,7 @@ body::-webkit-scrollbar,
     }
 
     .report-week {
-        gap: 5px;
+        --report-day-gap: 5px;
     }
 
     .report-day {
@@ -1088,7 +1118,8 @@ body::-webkit-scrollbar,
 .settings-save-profile,
 .settings-delete-data,
 .settings-backup-export,
-.settings-backup-import {
+.settings-backup-import,
+.settings-notification-test {
     min-height: 38px;
     padding: 0 14px;
     border: 0;
@@ -1184,6 +1215,48 @@ body::-webkit-scrollbar,
 
 .settings-accordion-content p {
     margin: 0;
+}
+
+#settings-backup-password {
+    width: 100%;
+    min-height: 50px;
+    padding: 0 14px;
+    border: 3px solid #72b7ff !important;
+    border-radius: 10px;
+    background: #102a37;
+    color: #f5f8fa;
+    font: inherit;
+    box-shadow: 0 0 0 3px rgb(45 115 236 / 24%);
+}
+
+.settings-backup-password-label {
+    color: #a9d4ff;
+    font-weight: 800;
+}
+
+.settings-backup-password::placeholder {
+    color: #aab9c0;
+    opacity: 1;
+}
+
+#settings-backup-password:focus {
+    border-color: #a9d4ff;
+    box-shadow: 0 0 0 4px rgb(45 115 236 / 32%);
+}
+
+#settings-backup-password:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+.dialog .settings-backup-password-prompt {
+    box-sizing: border-box;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 2px solid #72b7ff !important;
+    border-radius: 8px;
+    background: #102a37;
+    color: #f5f8fa;
 }
 
 .settings-about-accordion .settings-accordion-content p:first-child {
@@ -1346,6 +1419,20 @@ body::-webkit-scrollbar,
     .app-light-theme .settings-profile-editor label,
     .app-light-theme .settings-avatar-label {
         color: #405563;
+    }
+
+    .app-light-theme #settings-backup-password {
+        border-color: #1769d2 !important;
+        background: #fff;
+        color: #17202e;
+    }
+
+    .app-light-theme #settings-backup-password-label {
+        color: #164f92;
+    }
+
+    .app-light-theme .settings-backup-password::placeholder {
+        color: #697985;
     }
 
     .app-light-theme .settings-profile-name {
