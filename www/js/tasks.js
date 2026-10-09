@@ -9,6 +9,7 @@
 
   var storagePrefix = 'day-list-tasks:';
   var legacyStorageKey = 'day-list-tasks';
+  var recurringStorageKey = 'day-list-recurring-tasks';
   var maxTaskTitleLength = 200;
   var monthLabel = pageRoot.querySelector('.task-month-label');
   var daysContainer = pageRoot.querySelector('.task-days');
@@ -35,6 +36,7 @@
   var selectedDate = new Date();
   selectedDate.setHours(0, 0, 0, 0);
   var tasksByDate = loadTasks();
+  var recurringTasks = loadRecurringTasks();
 
   function padNumber(number) {
     return String(number).padStart(2, '0');
@@ -169,7 +171,15 @@
           return task.completed;
         })) {
           storedByDate[dateKey] = storedByDate[dateKey].map(function (task) {
-            return { title: task.title, completed: false, time: sanitizeTaskTime(task.time) };
+            var normalizedTask = {
+              title: task.title,
+              completed: false,
+              time: sanitizeTaskTime(task.time)
+            };
+            if (task.routineId) {
+              normalizedTask.routineId = task.routineId;
+            }
+            return normalizedTask;
           });
           storage.setItem(storagePrefix + dateKey, JSON.stringify(storedByDate[dateKey]));
         }
@@ -179,6 +189,92 @@
     } catch (error) {
       app.dialog.alert('Não foi possível carregar ou migrar as tarefas salvas. Os dados anteriores foram mantidos.');
       return storedByDate;
+    }
+  }
+
+  function loadRecurringTasks() {
+    try {
+      var stored = window.localStorage.getItem(recurringStorageKey);
+      if (!stored) {
+        return [];
+      }
+      var routines = JSON.parse(stored);
+      if (!Array.isArray(routines)) {
+        throw new Error('Formato de tarefas padrão inválido.');
+      }
+      return routines.map(function (routine) {
+        if (!routine || typeof routine.id !== 'string' ||
+            typeof routine.title !== 'string' || !Array.isArray(routine.weekdays) ||
+            !isValidDateKey(routine.startDate)) {
+          throw new Error('Formato de tarefa padrão inválido.');
+        }
+        var weekdays = routine.weekdays.filter(function (day, index, days) {
+          return Number.isInteger(day) && day >= 0 && day <= 6 && days.indexOf(day) === index;
+        });
+        var title = sanitizeTaskTitle(routine.title);
+        if (!weekdays.length || !title) {
+          throw new Error('A tarefa padrão salva não possui título ou dias válidos.');
+        }
+        return {
+          id: routine.id,
+          title: title,
+          time: sanitizeTaskTime(routine.time),
+          weekdays: weekdays,
+          startDate: routine.startDate,
+          skippedDates: Array.isArray(routine.skippedDates)
+            ? routine.skippedDates.filter(isValidDateKey)
+            : []
+        };
+      });
+    } catch (error) {
+      app.dialog.alert('Não foi possível carregar as tarefas padrão salvas neste dispositivo.');
+      return [];
+    }
+  }
+
+  function saveRecurringTasks(nextTasks) {
+    try {
+      window.localStorage.setItem(recurringStorageKey, JSON.stringify(nextTasks));
+      recurringTasks = nextTasks;
+      return true;
+    } catch (error) {
+      app.dialog.alert('Não foi possível salvar a tarefa padrão. Verifique o espaço disponível no dispositivo.');
+      return false;
+    }
+  }
+
+  function syncRecurringTasks(dateKey) {
+    var dateParts = dateKey.split('-').map(Number);
+    var date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+    var dayTasks = (tasksByDate[dateKey] || []).slice();
+    var changed = false;
+
+    recurringTasks.forEach(function (routine) {
+      if (dateKey < routine.startDate ||
+          routine.weekdays.indexOf(date.getDay()) === -1 ||
+          routine.skippedDates.indexOf(dateKey) !== -1 ||
+          dayTasks.some(function (task) { return task.routineId === routine.id; })) {
+        return;
+      }
+      dayTasks.push({
+        title: routine.title,
+        completed: false,
+        time: routine.time,
+        routineId: routine.id
+      });
+      changed = true;
+    });
+
+    if (!changed) {
+      return;
+    }
+
+    dayTasks = sortTasks(dayTasks);
+    try {
+      window.localStorage.setItem(storagePrefix + dateKey, JSON.stringify(dayTasks));
+      tasksByDate[dateKey] = dayTasks;
+    } catch (error) {
+      app.dialog.alert('Não foi possível adicionar as tarefas padrão deste dia. Verifique o espaço disponível no dispositivo.');
     }
   }
 
@@ -208,11 +304,15 @@
         throw new Error('Formato de tarefa inválido.');
       }
 
-      return {
+      var normalized = {
         title: sanitizeTaskTitle(task.title),
         completed: task.completed,
         time: sanitizeTaskTime(task.time)
       };
+      if (typeof task.routineId === 'string') {
+        normalized.routineId = task.routineId;
+      }
+      return normalized;
     });
   }
 
@@ -260,6 +360,7 @@
 
   function renderTasks() {
     var dateKey = getDateKey(selectedDate);
+    syncRecurringTasks(dateKey);
     var today = new Date();
     today.setHours(0, 0, 0, 0);
     var canCompleteTasks = dateKey === getDateKey(today);
@@ -269,7 +370,7 @@
     var pendingTasks = tasks.filter(function (task) { return !task.completed; }).length;
 
     taskList.replaceChildren();
-    tasks.forEach(function (task, index) {
+    tasks.forEach(function (task) {
       var item = document.createElement('li');
       var completionLabel = document.createElement('label');
       var checkbox = document.createElement('input');
@@ -282,7 +383,7 @@
 
       item.className = 'task-item';
       item.classList.toggle('is-completed', task.completed);
-      item.dataset.taskIndex = String(index);
+      item.dataset.taskIndex = String((tasksByDate[dateKey] || []).indexOf(task));
 
       completionLabel.className = 'task-completion';
       completionLabel.classList.toggle('is-completion-disabled', !canCompleteTasks);
@@ -395,40 +496,107 @@
     renderCalendar();
   }
 
-  function addTask() {
+  function getTaskDateKeyForAddition() {
     var taskDateKey = getDateKey(selectedDate);
     var today = new Date();
     today.setHours(0, 0, 0, 0);
     if (taskDateKey < getDateKey(today)) {
       app.dialog.alert('Não é possível adicionar tarefas a dias anteriores. Registre as tarefas no dia em que forem realizadas.');
+      return null;
+    }
+    return taskDateKey;
+  }
+
+  function showAddTaskOptions() {
+    app.dialog.create({
+      title: 'Adicionar tarefa',
+      text: 'Escolha como deseja planejar sua tarefa.',
+      buttons: [
+        { text: 'Cancelar' },
+        { text: 'Tarefa simples', bold: true },
+        { text: 'Tarefa padrão', bold: true }
+      ],
+      onClick: function (dialog, index) {
+        if (index === 1) {
+          window.setTimeout(addTask, 0);
+        } else if (index === 2) {
+          window.setTimeout(addRecurringTask, 0);
+        }
+      }
+    }).open();
+  }
+
+  function bindTimeInput(input) {
+    input.addEventListener('input', function () {
+      var selectionStart = input.selectionStart === null ? input.value.length : input.selectionStart;
+      var digitsBeforeCursor = input.value.slice(0, selectionStart).replace(/\D/g, '').length;
+      var digits = input.value.replace(/\D/g, '').slice(0, 4);
+      var separatorPosition = digits.length === 3 ? 1 : 2;
+      var formatted = digits.length <= 2
+        ? digits
+        : digits.slice(0, separatorPosition) + ':' + digits.slice(separatorPosition);
+      input.value = formatted;
+      var caret = digitsBeforeCursor + (digitsBeforeCursor >= separatorPosition && digits.length > 2 ? 1 : 0);
+      input.setSelectionRange(caret, caret);
+    });
+  }
+
+  function openTaskDialog(isRecurring) {
+    var taskDateKey = getTaskDateKeyForAddition();
+    if (!taskDateKey) {
       return;
     }
 
+    var weekdays = [
+      { value: 0, label: 'Domingo' },
+      { value: 1, label: 'Segunda-feira' },
+      { value: 2, label: 'Terça-feira' },
+      { value: 3, label: 'Quarta-feira' },
+      { value: 4, label: 'Quinta-feira' },
+      { value: 5, label: 'Sexta-feira' },
+      { value: 6, label: 'Sábado' }
+    ];
+    var timeInputId = isRecurring ? 'routine-dialog-time' : 'task-dialog-time';
+    var content = '<div class="task-dialog-content">' +
+      '<div class="task-dialog-field">' +
+      '<label for="' + (isRecurring ? 'routine-dialog-title' : 'task-dialog-title') + '">Tarefa</label>' +
+      '<input id="' + (isRecurring ? 'routine-dialog-title' : 'task-dialog-title') +
+      '" type="text" maxlength="200" placeholder="Digite a tarefa" autocomplete="off" autofocus />' +
+      '</div>' +
+      '<div class="task-dialog-field">' +
+      '<label for="' + timeInputId + '">Horário</label>' +
+      '<input id="' + timeInputId +
+      '" type="text" inputmode="numeric" maxlength="5" placeholder="Ex.: 09:30" autocomplete="off" />' +
+      '</div>';
+
+    if (isRecurring) {
+      content += '<fieldset class="task-dialog-field task-weekday-field">' +
+        '<legend>Dias da semana</legend><div class="task-weekday-options">';
+      weekdays.forEach(function (weekday) {
+        content += '<label><input type="checkbox" value="' + weekday.value + '"' +
+          (selectedDate.getDay() === weekday.value ? ' checked' : '') +
+          '><span>' + weekday.label + '</span></label>';
+      });
+      content += '</div></fieldset>';
+    }
+    content += '</div>';
+
     var taskDialog = app.dialog.create({
-      title: 'Nova tarefa',
-      content: '<div class="task-dialog-content">' +
-        '<div class="task-dialog-field">' +
-        '<label for="task-dialog-title">Tarefa</label>' +
-        '<input id="task-dialog-title" type="text" maxlength="200" placeholder="Digite a tarefa" autocomplete="off" autofocus />' +
-        '</div>' +
-        '<div class="task-dialog-field">' +
-        '<label for="task-dialog-time">Horário</label>' +
-        '<input id="task-dialog-time" type="text" inputmode="numeric" maxlength="5" placeholder="Ex.: 9:30 / 9h30" autocomplete="off" />' +
-        '</div>' +
-        '</div>',
+      title: isRecurring ? 'Nova tarefa padrão' : 'Nova tarefa',
+      content: content,
       buttons: [
         { text: 'Cancelar' },
         { text: 'Salvar', bold: true }
       ],
       onClick: function (dialog, index) {
         if (index === 1) {
-          var titleInput = document.getElementById('task-dialog-title');
-          var timeInput = document.getElementById('task-dialog-time');
+          var titleInput = document.getElementById(isRecurring ? 'routine-dialog-title' : 'task-dialog-title');
+          var timeInput = document.getElementById(timeInputId);
           var title = titleInput && titleInput.value ? titleInput.value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim() : '';
           var time = sanitizeTaskTime(timeInput && timeInput.value ? timeInput.value : '');
 
           if (timeInput && timeInput.value && !time) {
-            app.dialog.alert('O horário deve estar em um formato válido, como 09:30, 9:30, 9h30 ou 930.');
+            app.dialog.alert('O horário deve estar em um formato válido, como 09:30.');
             return;
           }
 
@@ -441,24 +609,37 @@
             return;
           }
 
-          var currentDate = new Date();
-          currentDate.setHours(0, 0, 0, 0);
-          if (taskDateKey < getDateKey(currentDate)) {
-            app.dialog.alert('Não é possível adicionar tarefas a dias anteriores. Registre as tarefas no dia em que forem realizadas.');
-            return;
-          }
+          if (isRecurring) {
+            var selectedWeekdays = Array.prototype.slice.call(
+              document.querySelectorAll('.task-weekday-options input:checked')
+            ).map(function (input) { return Number(input.value); });
+            if (!selectedWeekdays.length) {
+              app.dialog.alert('Selecione pelo menos um dia da semana.');
+              return;
+            }
+            var routine = {
+              id: Date.now().toString(36) + Math.random().toString(36).slice(2, 10),
+              title: title,
+              time: time,
+              weekdays: selectedWeekdays,
+              startDate: taskDateKey,
+              skippedDates: []
+            };
+            if (saveRecurringTasks(recurringTasks.concat(routine))) {
+              renderCalendar();
+            }
+          } else {
+            var previousTasks = tasksByDate[taskDateKey];
+            tasksByDate = Object.assign({}, tasksByDate);
+            tasksByDate[taskDateKey] = sortTasks((tasksByDate[taskDateKey] || []).concat({
+              title: title,
+              completed: false,
+              time: time
+            }));
 
-          var dateKey = taskDateKey;
-          var previousTasks = tasksByDate[dateKey];
-          tasksByDate = Object.assign({}, tasksByDate);
-          tasksByDate[dateKey] = sortTasks((tasksByDate[dateKey] || []).concat({
-            title: title,
-            completed: false,
-            time: time
-          }));
-
-          if (saveTasks(dateKey, previousTasks)) {
-            renderCalendar();
+            if (saveTasks(taskDateKey, previousTasks)) {
+              renderCalendar();
+            }
           }
         }
       }
@@ -466,12 +647,24 @@
 
     taskDialog.open();
     window.setTimeout(function () {
-      var titleInput = document.getElementById('task-dialog-title');
+      var titleInput = document.getElementById(isRecurring ? 'routine-dialog-title' : 'task-dialog-title');
+      var timeInput = document.getElementById(timeInputId);
       if (titleInput) {
         titleInput.focus();
         titleInput.select();
       }
+      if (timeInput) {
+        bindTimeInput(timeInput);
+      }
     }, 100);
+  }
+
+  function addTask() {
+    openTaskDialog(false);
+  }
+
+  function addRecurringTask() {
+    openTaskDialog(true);
   }
 
   function escapeHtml(value) {
@@ -576,7 +769,7 @@
     tasksByDate = Object.assign({}, tasksByDate);
     tasksByDate[dateKey] = tasksByDate[dateKey].map(function (task, index) {
       return index === taskIndex
-        ? { title: task.title, completed: checkbox.checked, time: sanitizeTaskTime(task.time) }
+        ? Object.assign({}, task, { completed: checkbox.checked, time: sanitizeTaskTime(task.time) })
         : task;
     });
 
@@ -605,6 +798,20 @@
       'Tem certeza de que deseja excluir a tarefa "' + escapeHtml(task.title) + '"?',
       'Excluir tarefa',
       function () {
+        if (task.routineId) {
+          var nextRoutines = recurringTasks.map(function (routine) {
+            if (routine.id !== task.routineId ||
+                routine.skippedDates.indexOf(dateKey) !== -1) {
+              return routine;
+            }
+            return Object.assign({}, routine, {
+              skippedDates: routine.skippedDates.concat(dateKey)
+            });
+          });
+          if (!saveRecurringTasks(nextRoutines)) {
+            return;
+          }
+        }
         var previousTasks = tasksByDate[dateKey];
         tasksByDate = Object.assign({}, tasksByDate);
         tasksByDate[dateKey] = tasksByDate[dateKey].filter(function (currentTask, index) {
@@ -624,12 +831,13 @@
 
   addButton.addEventListener('click', function (event) {
     event.preventDefault();
-    addTask();
+    showAddTaskOptions();
   });
 
   searchButton.addEventListener('click', searchTasks);
   pageRoot.addEventListener('tasks:refresh', function () {
     tasksByDate = loadTasks();
+    recurringTasks = loadRecurringTasks();
     renderCalendar();
   });
 

@@ -3,6 +3,7 @@
   var settingsStorageKey = 'day-list-settings';
   var taskStoragePrefix = 'day-list-tasks:';
   var legacyTaskStorageKey = 'day-list-tasks';
+  var recurringStorageKey = 'day-list-recurring-tasks';
   var maxProfileNameLength = 60;
   var maxTaskTitleLength = 200;
   var maxBackupFileSize = 10 * 1024 * 1024;
@@ -132,6 +133,76 @@
     }
   }
 
+  function openProfileDialog() {
+    var profile = readProfile();
+    var selectedAvatar = profile.avatar;
+    var avatarButtons = avatarOptions.map(function (avatar, index) {
+      return '<button class="settings-avatar-option" type="button" aria-pressed="' +
+        String(avatar === selectedAvatar) + '" data-profile-avatar-choice="' + avatar +
+        '" aria-label="Escolher foto de perfil ' + (index + 1) + '">' +
+        '<img src="' + avatar + '" alt=""></button>';
+    }).join('');
+    var dialog = app.dialog.create({
+      title: 'Editar perfil',
+      content: '<div class="task-dialog-content profile-dialog-content">' +
+        '<div class="task-dialog-field">' +
+        '<label for="profile-dialog-name">Nome de usuário</label>' +
+        '<input id="profile-dialog-name" class="settings-profile-name" type="text" maxlength="60" ' +
+        'autocomplete="name" value="' + escapeHtml(profile.name) + '">' +
+        '</div>' +
+        '<span class="settings-avatar-label">Escolha uma foto</span>' +
+        '<div class="settings-avatar-options" role="group" aria-label="Fotos de perfil">' +
+        avatarButtons + '</div></div>',
+      buttons: [
+        { text: 'Cancelar' },
+        { text: 'Salvar', bold: true }
+      ],
+      onClick: function (instance, index) {
+        if (index !== 1) {
+          return;
+        }
+        var nameInput = instance.$el[0].querySelector('#profile-dialog-name');
+        var name;
+        try {
+          name = validateText(nameInput.value, maxProfileNameLength, 'O nome do perfil');
+        } catch (error) {
+          showError(error.message);
+          nameInput.focus();
+          return;
+        }
+        var selectedButton = instance.$el[0].querySelector('[data-profile-avatar-choice][aria-pressed="true"]');
+        var nextProfile = {
+          name: name,
+          avatar: selectedButton ? selectedButton.dataset.profileAvatarChoice : profile.avatar
+        };
+        if (saveProfile(nextProfile)) {
+          instance.close();
+        }
+      }
+    });
+    dialog.open();
+    window.setTimeout(function () {
+      var nameInput = dialog.$el && dialog.$el[0] &&
+        dialog.$el[0].querySelector('#profile-dialog-name');
+      if (nameInput) {
+        nameInput.focus();
+        nameInput.select();
+      }
+    }, 100);
+  }
+
+  function escapeHtml(value) {
+    return value.replace(/[&<>"']/g, function (character) {
+      return {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[character];
+    });
+  }
+
   function getAppStorageSnapshot() {
     var data = {};
     for (var index = 0; index < window.localStorage.length; index += 1) {
@@ -145,7 +216,7 @@
 
   function isAppStorageKey(key) {
     return key === profileStorageKey || key === settingsStorageKey ||
-      key === legacyTaskStorageKey ||
+      key === legacyTaskStorageKey || key === recurringStorageKey ||
       (key && key.indexOf(taskStoragePrefix) === 0);
   }
 
@@ -176,59 +247,90 @@
       } else {
         throw new Error('Uma tarefa no backup está inválida.');
       }
-      return {
+      var normalized = {
         title: validateText(title, maxTaskTitleLength, 'O título da tarefa'),
-        completed: completed
+        completed: completed,
+        time: normalizeTaskTime(typeof task === 'string' ? '' : task.time)
+      };
+      if (typeof task !== 'string' && typeof task.routineId === 'string') {
+        normalized.routineId = task.routineId;
+      }
+      return normalized;
+    });
+  }
+
+  function normalizeTaskTime(value) {
+    if (value === undefined || value === null || value === '') {
+      return '';
+    }
+    if (typeof value !== 'string') {
+      throw new Error('O horário de uma tarefa no backup está inválido.');
+    }
+    var normalized = value.trim().toLowerCase().replace(/\s+/g, '');
+    var hours;
+    var minutes = 0;
+    if (/^\d{1,2}:\d{2}$/.test(normalized)) {
+      var parts = normalized.split(':');
+      hours = Number(parts[0]);
+      minutes = Number(parts[1]);
+    } else if (/^\d{1,2}h\d{2}$/.test(normalized)) {
+      var hourParts = normalized.split('h');
+      hours = Number(hourParts[0]);
+      minutes = Number(hourParts[1]);
+    } else if (/^\d{1,2}[h.]?$/.test(normalized)) {
+      hours = Number(normalized.replace(/[h.]$/, ''));
+    } else if (/^\d{1,2}\.\d{2}$/.test(normalized)) {
+      var dottedParts = normalized.split('.');
+      hours = Number(dottedParts[0]);
+      minutes = Number(dottedParts[1]);
+    } else if (/^\d{3,4}$/.test(normalized)) {
+      hours = Number(normalized.slice(0, normalized.length - 2));
+      minutes = Number(normalized.slice(-2));
+    } else {
+      throw new Error('O horário de uma tarefa no backup está inválido.');
+    }
+    if (hours > 23 || minutes > 59) {
+      throw new Error('O horário de uma tarefa no backup está inválido.');
+    }
+    return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
+  }
+
+  function validateRecurringTasks(tasks) {
+    if (!Array.isArray(tasks)) {
+      throw new Error('As tarefas padrão no backup estão inválidas.');
+    }
+    return tasks.map(function (task) {
+      if (!task || typeof task.id !== 'string' || !Array.isArray(task.weekdays) ||
+          !isValidDateKey(task.startDate)) {
+        throw new Error('Uma tarefa padrão no backup está inválida.');
+      }
+      var weekdays = task.weekdays.filter(function (day, index, days) {
+        return Number.isInteger(day) && day >= 0 && day <= 6 && days.indexOf(day) === index;
+      });
+      if (!weekdays.length) {
+        throw new Error('Uma tarefa padrão precisa ter pelo menos um dia válido.');
+      }
+      return {
+        id: task.id,
+        title: validateText(task.title, maxTaskTitleLength, 'O título da tarefa padrão'),
+        time: normalizeTaskTime(task.time),
+        weekdays: weekdays,
+        startDate: task.startDate,
+        skippedDates: Array.isArray(task.skippedDates)
+          ? task.skippedDates.filter(isValidDateKey)
+          : []
       };
     });
   }
 
-  function getTopFrequentTaskTitles() {
+  function getAllowedBackupPasswords() {
     var snapshot = getAppStorageSnapshot();
-    var tasksByDate = {};
-    var dailyTaskKeys = Object.keys(snapshot).filter(function (key) {
-      return key.indexOf(taskStoragePrefix) === 0;
-    });
-
-    dailyTaskKeys.forEach(function (key) {
-      var dateKey = key.slice(taskStoragePrefix.length);
-      if (!isValidDateKey(dateKey)) {
-        return;
-      }
-      tasksByDate[dateKey] = validateTaskList(JSON.parse(snapshot[key]));
-    });
-
-    if (snapshot[legacyTaskStorageKey]) {
-      var legacyTasks = JSON.parse(snapshot[legacyTaskStorageKey]);
-      if (!legacyTasks || typeof legacyTasks !== 'object' || Array.isArray(legacyTasks)) {
-        throw new Error('As tarefas salvas neste dispositivo estão inválidas.');
-      }
-      Object.keys(legacyTasks).forEach(function (dateKey) {
-        if (!isValidDateKey(dateKey)) {
-          return;
-        }
-        if (!Object.prototype.hasOwnProperty.call(tasksByDate, dateKey)) {
-          tasksByDate[dateKey] = validateTaskList(legacyTasks[dateKey]);
-        }
-      });
+    if (!snapshot[recurringStorageKey]) {
+      return [];
     }
-
-    var frequencyByTitle = {};
-    Object.keys(tasksByDate).sort().forEach(function (dateKey) {
-      tasksByDate[dateKey].forEach(function (task) {
-        var normalizedTitle = task.title.toLocaleLowerCase('pt-BR');
-        if (!Object.prototype.hasOwnProperty.call(frequencyByTitle, normalizedTitle)) {
-          frequencyByTitle[normalizedTitle] = { title: task.title, count: 0 };
-        }
-        frequencyByTitle[normalizedTitle].count += 1;
-      });
-    });
-
-    return Object.keys(frequencyByTitle).map(function (key) {
-      return frequencyByTitle[key];
-    }).sort(function (first, second) {
-      return second.count - first.count || first.title.localeCompare(second.title, 'pt-BR');
-    }).slice(0, 3);
+    return validateRecurringTasks(JSON.parse(snapshot[recurringStorageKey]))
+      .slice(0, 3)
+      .map(function (routine) { return { title: routine.title }; });
   }
 
   function getCryptoApi() {
@@ -601,6 +703,8 @@
           safeTasksByDate[dateKey] = validateTaskList(tasksByDate[dateKey]);
         });
         safeData[key] = JSON.stringify(safeTasksByDate);
+      } else if (key === recurringStorageKey) {
+        safeData[key] = JSON.stringify(validateRecurringTasks(JSON.parse(value)));
       } else if (key === profileStorageKey) {
         var profile = JSON.parse(value);
         if (!profile || typeof profile.name !== 'string') {
@@ -693,12 +797,12 @@
     var backup;
     var password = passwordInput ? passwordInput.value.trim() : '';
     try {
-      var topTitles = getTopFrequentTaskTitles();
-      if (!topTitles.length) {
-        throw new Error('Adicione pelo menos uma tarefa antes de criar um backup protegido por senha.');
+      var allowedPasswords = getAllowedBackupPasswords();
+      if (!allowedPasswords.length) {
+        throw new Error('Cadastre uma tarefa padrão personalizada antes de criar um backup protegido por senha.');
       }
-      if (topTitles.every(function (task) { return task.title !== password.trim(); })) {
-        throw new Error('A senha deve ser exatamente um dos três títulos de tarefa mais frequentes exibidos nesta seção.');
+      if (allowedPasswords.every(function (task) { return task.title !== password.trim(); })) {
+        throw new Error('A senha deve ser exatamente o título de uma das três tarefas padrão personalizadas exibidas nesta seção.');
       }
       backup = {
         format: 'day-list-backup',
@@ -814,15 +918,15 @@
       profileName.value = profile.name;
       selectAvatar(profile.avatar);
       try {
-        var frequentTasks = getTopFrequentTaskTitles();
-        backupPasswordHint.textContent = frequentTasks.length
-          ? 'Senhas permitidas: ' + frequentTasks.map(function (task) {
-            return '“' + task.title + '” (' + task.count + 'x)';
+        var passwordTasks = getAllowedBackupPasswords();
+        backupPasswordHint.textContent = passwordTasks.length
+          ? 'Senhas permitidas (até 3 tarefas padrão): ' + passwordTasks.map(function (task) {
+            return '“' + task.title + '”';
           }).join(', ') + '.'
-          : 'Adicione pelo menos uma tarefa para definir uma senha de backup.';
+          : 'Cadastre pelo menos uma tarefa padrão personalizada para definir uma senha de backup.';
       } catch (error) {
-        backupPasswordHint.textContent = 'Não foi possível ler as tarefas frequentes para definir a senha.';
-        console.error('Não foi possível calcular as tarefas mais frequentes para o backup.', error);
+        backupPasswordHint.textContent = 'Não foi possível ler as tarefas padrão para definir a senha.';
+        console.error('Não foi possível carregar as tarefas padrão para o backup.', error);
       }
     }
 
@@ -1016,6 +1120,25 @@
       document.querySelectorAll('.settings-page').forEach(function (page) {
         page.dispatchEvent(new Event('settings:refresh'));
       });
+    }
+  });
+
+  document.addEventListener('click', function (event) {
+    var avatarChoice = event.target.closest('[data-profile-avatar-choice]');
+    if (avatarChoice) {
+      var avatarDialog = avatarChoice.closest('.dialog');
+      if (avatarDialog) {
+        avatarDialog.querySelectorAll('[data-profile-avatar-choice]').forEach(function (choice) {
+          choice.setAttribute('aria-pressed', String(choice === avatarChoice));
+        });
+      }
+      return;
+    }
+
+    var profileButton = event.target.closest('.task-avatar');
+    if (profileButton) {
+      event.preventDefault();
+      openProfileDialog();
     }
   });
 
