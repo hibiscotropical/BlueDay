@@ -1123,25 +1123,6 @@
     }
   });
 
-  document.addEventListener('click', function (event) {
-    var avatarChoice = event.target.closest('[data-profile-avatar-choice]');
-    if (avatarChoice) {
-      var avatarDialog = avatarChoice.closest('.dialog');
-      if (avatarDialog) {
-        avatarDialog.querySelectorAll('[data-profile-avatar-choice]').forEach(function (choice) {
-          choice.setAttribute('aria-pressed', String(choice === avatarChoice));
-        });
-      }
-      return;
-    }
-
-    var profileButton = event.target.closest('.task-avatar');
-    if (profileButton) {
-      event.preventDefault();
-      openProfileDialog();
-    }
-  });
-
   if (window.app && typeof window.app.on === 'function') {
     window.app.on('pageInit', function (page) {
       if (page.name === 'notificacoes') {

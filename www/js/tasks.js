@@ -515,7 +515,7 @@
         { text: 'Cancelar' },
         { text: 'simples', bold: true },
         { text: 'padrão', bold: true }
-      ],
+      ], 
       onClick: function (dialog, index) {
         if (index === 1) {
           window.setTimeout(addTask, 0);
@@ -794,58 +794,159 @@ taskList.addEventListener('click', function (event) {
       return;
     }
 
-    var confirmMessage = task.routineId 
-      ? 'Tem certeza de que deseja excluir TODAS as repetições da tarefa padrão "' + escapeHtml(task.title) + '"?'
-      : 'Tem certeza de que deseja excluir a tarefa "' + escapeHtml(task.title) + '"?';
+    if (task.routineId) {
+      app.dialog.create({
+        title: 'Excluir ou Editar',
+        text: 'O que deseja fazer com a tarefa padrão "' + escapeHtml(task.title) + '"?',
+        buttons: [
+          { text: 'Cancelar' },
+          {
+            text: 'Somente deste dia',
+            onClick: function () {
+              var routineIndex = -1;
+              for (var i = 0; i < recurringTasks.length; i++) {
+                if (recurringTasks[i].id === task.routineId) {
+                  routineIndex = i;
+                  break;
+                }
+              }
+              
+              if (routineIndex !== -1) {
+                var updatedRoutines = recurringTasks.slice();
+                if (updatedRoutines[routineIndex].skippedDates.indexOf(dateKey) === -1) {
+                  updatedRoutines[routineIndex].skippedDates.push(dateKey);
+                }
+                if (!saveRecurringTasks(updatedRoutines)) return;
+              }
 
-    app.dialog.confirm(
-      confirmMessage,
-      'Excluir tarefa',
-      function () {
-        if (task.routineId) {
-          // 1. Remove a rotina do array de tarefas recorrentes
-          var nextRoutines = recurringTasks.filter(function (routine) {
-            return routine.id !== task.routineId;
-          });
-          
-          if (!saveRecurringTasks(nextRoutines)) {
-            return;
-          }
+              var previousTasks = tasksByDate[dateKey];
+              tasksByDate = Object.assign({}, tasksByDate);
+              tasksByDate[dateKey] = tasksByDate[dateKey].filter(function (t, idx) {
+                return idx !== taskIndex;
+              });
 
-          // 2. Remove todas as instâncias geradas dessa rotina no histórico (passado e futuro)
-          Object.keys(tasksByDate).forEach(function (dKey) {
-            tasksByDate[dKey] = tasksByDate[dKey].filter(function (t) {
-              return t.routineId !== task.routineId;
-            });
-
-            if (tasksByDate[dKey].length === 0) {
-              delete tasksByDate[dKey];
-              window.localStorage.removeItem(storagePrefix + dKey);
-            } else {
-              window.localStorage.setItem(storagePrefix + dKey, JSON.stringify(tasksByDate[dKey]));
+              if (tasksByDate[dateKey].length === 0) delete tasksByDate[dateKey];
+              if (saveTasks(dateKey, previousTasks)) renderTasks();
             }
-          });
+          },
+          {
+            text: 'Alterar dias da semana',
+            onClick: function () {
+              var rIndex = -1;
+              for (var k = 0; k < recurringTasks.length; k++) {
+                if (recurringTasks[k].id === task.routineId) {
+                  rIndex = k;
+                  break;
+                }
+              }
+              if (rIndex === -1) return;
+              var currentWeekdays = recurringTasks[rIndex].weekdays;
+              
+              var wDays = [
+                { val: 0, lbl: 'Domingo' }, { val: 1, lbl: 'Segunda-feira' },
+                { val: 2, lbl: 'Terça-feira' }, { val: 3, lbl: 'Quarta-feira' },
+                { val: 4, lbl: 'Quinta-feira' }, { val: 5, lbl: 'Sexta-feira' },
+                { val: 6, lbl: 'Sábado' }
+              ];
 
-          renderTasks();
+              var html = '<div class="task-dialog-content"><fieldset class="task-dialog-field task-weekday-field">' +
+                         '<legend>Repetir nestes dias:</legend><div class="task-weekday-options">';
+              wDays.forEach(function (d) {
+                var checked = currentWeekdays.indexOf(d.val) !== -1 ? ' checked' : '';
+                html += '<label><input type="checkbox" value="' + d.val + '"' + checked + '><span>' + d.lbl + '</span></label>';
+              });
+              html += '</div></fieldset></div>';
 
-        } else {
-          // Comportamento original para tarefas simples (apaga apenas 1)
+              window.setTimeout(function() {
+                app.dialog.create({
+                  title: 'Editar dias',
+                  content: html,
+                  buttons: [
+                    { text: 'Cancelar' },
+                    {
+                      text: 'Salvar',
+                      bold: true,
+                      onClick: function (dlg) {
+                        var selected = Array.prototype.slice.call(
+                          dlg.$el[0].querySelectorAll('.task-weekday-options input:checked')
+                        ).map(function (inp) { return Number(inp.value); });
+
+                        if (!selected.length) {
+                          app.dialog.alert('Selecione pelo menos um dia, ou escolha a opção de excluir todas as repetições.');
+                          return;
+                        }
+
+                        var updRoutines = recurringTasks.slice();
+                        updRoutines[rIndex] = Object.assign({}, updRoutines[rIndex], { weekdays: selected });
+                        if (!saveRecurringTasks(updRoutines)) return;
+
+                        Object.keys(tasksByDate).forEach(function (dKey) {
+                          var parts = dKey.split('-').map(Number);
+                          var dObj = new Date(parts[0], parts[1] - 1, parts[2]);
+                          if (selected.indexOf(dObj.getDay()) === -1) {
+                            tasksByDate[dKey] = tasksByDate[dKey].filter(function (t) {
+                              return t.routineId !== task.routineId;
+                            });
+                            if (tasksByDate[dKey].length === 0) {
+                              delete tasksByDate[dKey];
+                              window.localStorage.removeItem(storagePrefix + dKey);
+                            } else {
+                              window.localStorage.setItem(storagePrefix + dKey, JSON.stringify(tasksByDate[dKey]));
+                            }
+                          }
+                        });
+                        renderTasks();
+                      }
+                    }
+                  ]
+                }).open();
+              }, 300);
+            }
+          },
+          {
+            text: 'Todas as repetições',
+            bold: true,
+            color: 'red',
+            onClick: function () {
+              var nextRoutines = recurringTasks.filter(function (r) {
+                return r.id !== task.routineId;
+              });
+              if (!saveRecurringTasks(nextRoutines)) return;
+
+              Object.keys(tasksByDate).forEach(function (dKey) {
+                tasksByDate[dKey] = tasksByDate[dKey].filter(function (t) {
+                  return t.routineId !== task.routineId;
+                });
+                if (tasksByDate[dKey].length === 0) {
+                  delete tasksByDate[dKey];
+                  window.localStorage.removeItem(storagePrefix + dKey);
+                } else {
+                  window.localStorage.setItem(storagePrefix + dKey, JSON.stringify(tasksByDate[dKey]));
+                }
+              });
+              renderTasks();
+            }
+          }
+        ],
+        verticalButtons: true
+      }).open();
+
+    } else {
+      app.dialog.confirm(
+        'Tem certeza de que deseja excluir a tarefa "' + escapeHtml(task.title) + '"?',
+        'Excluir tarefa',
+        function () {
           var previousTasks = tasksByDate[dateKey];
           tasksByDate = Object.assign({}, tasksByDate);
-          tasksByDate[dateKey] = tasksByDate[dateKey].filter(function (currentTask, index) {
-            return index !== taskIndex;
+          tasksByDate[dateKey] = tasksByDate[dateKey].filter(function (t, idx) {
+            return idx !== taskIndex;
           });
 
-          if (tasksByDate[dateKey].length === 0) {
-            delete tasksByDate[dateKey];
-          }
-
-          if (saveTasks(dateKey, previousTasks)) {
-            renderTasks();
-          }
+          if (tasksByDate[dateKey].length === 0) delete tasksByDate[dateKey];
+          if (saveTasks(dateKey, previousTasks)) renderTasks();
         }
-      }
-    );
+      );
+    }
   });
 
   addButton.addEventListener('click', function (event) {

@@ -504,18 +504,6 @@ body::-webkit-scrollbar,
     box-shadow: 0 12px 28px rgb(17 32 45 / 18%) !important;
 }
 
-.dialog .dialog-inner {
-    background: transparent !important;
-}
-
-.dialog .dialog-title {
-    margin: 0 0 10px;
-    color: #1d2a39 !important;
-    font-size: 24px !important;
-    font-weight: 800 !important;
-    line-height: 1.2 !important;
-}
-
 .dialog .dialog-text,
 .dialog .dialog-content,
 .dialog .dialog-button {
@@ -1474,7 +1462,25 @@ body::-webkit-scrollbar,
         padding-left: 47px;
     }
 }
+.report-freezes {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: rgba(0, 212, 255, 0.1); /* Fundo levemente azulado */
+    border: 1px solid rgba(0, 212, 255, 0.2);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-top: 16px;
+    margin-bottom: 16px;
+    color: #ffffff;
+    font-size: 15px;
+}
 
+.report-freeze-count {
+    font-weight: bold;
+    font-size: 18px;
+    color: #00d4ff; /* Azul vibrante para dar destaque ao número */
+}
 @media (prefers-reduced-motion: reduce) {
     .settings-chevron {
         transition-duration: 1ms;

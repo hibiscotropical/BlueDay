@@ -25,6 +25,8 @@
     var moodIcon = mood && mood.querySelector('.mdi');
     var performanceTitle = pageRoot.querySelector('.report-performance-title');
     var performanceMessage = pageRoot.querySelector('.report-performance-message');
+    var freezeCountElement = pageRoot.querySelector('.report-freeze-count');
+    var freezesContainer = pageRoot.querySelector('.report-freezes'); // NOVO ELEMENTO HTML
 
     if (!monthTitle || !calendarGrid || !emptyState || !emptyTitle ||
         !emptyMessage || !emptyAddButton || !stats || !feedback || !completedCount ||
@@ -35,6 +37,8 @@
 
     pageRoot.dataset.reportInitialized = 'true';
     var storagePrefix = 'day-list-tasks:';
+    var freezeStorageKey = 'day-list-freezes'; // CHAVE DE CONGELAMENTOS
+    var freezeAwardLogKey = 'day-list-freeze-awards'; // Evitar dar 2 congelamentos na mesma semana
     var maxTaskTitleLength = 200;
     var today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -87,21 +91,15 @@
       try {
         for (var index = 0; index < window.localStorage.length; index += 1) {
           var key = window.localStorage.key(index);
-          if (!key || key.indexOf(storagePrefix) !== 0) {
-            continue;
-          }
+          if (!key || key.indexOf(storagePrefix) !== 0) continue;
 
           var dateKey = key.slice(storagePrefix.length);
           var entries = JSON.parse(window.localStorage.getItem(key));
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !Array.isArray(entries)) {
-            continue;
-          }
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !Array.isArray(entries)) continue;
 
           var changedDay = false;
           tasks[dateKey] = entries.map(function (entry) {
-            if (typeof entry === 'string') {
-              return { title: sanitizeTaskTitle(entry), completed: false };
-            }
+            if (typeof entry === 'string') return { title: sanitizeTaskTitle(entry), completed: false };
             if (!entry || typeof entry.title !== 'string' || typeof entry.completed !== 'boolean') {
               throw new Error('Os dados de uma tarefa não são válidos.');
             }
@@ -112,9 +110,7 @@
             }
             return { title: sanitizeTaskTitle(entry.title), completed: completed };
           });
-          if (changedDay) {
-            window.localStorage.setItem(key, JSON.stringify(tasks[dateKey]));
-          }
+          if (changedDay) window.localStorage.setItem(key, JSON.stringify(tasks[dateKey]));
         }
       } catch (error) {
         app.dialog.alert('Não foi possível carregar os dados do relatório salvos neste dispositivo.');
@@ -128,18 +124,112 @@
       return tasks;
     }
 
+    // --- SISTEMA DE CONGELAMENTO ---
+    function getFreezes() {
+      return parseInt(window.localStorage.getItem(freezeStorageKey) || '0', 10);
+    }
+
+    function setFreezes(count) {
+      window.localStorage.setItem(freezeStorageKey, String(count));
+      if (freezeCountElement) freezeCountElement.textContent = String(count);
+    }
+
+    function hasAwardedFreezeThisWeek(saturdayDateKey) {
+      var log = JSON.parse(window.localStorage.getItem(freezeAwardLogKey) || '[]');
+      return log.indexOf(saturdayDateKey) !== -1;
+    }
+
+    function logFreezeAward(saturdayDateKey) {
+      var log = JSON.parse(window.localStorage.getItem(freezeAwardLogKey) || '[]');
+      log.push(saturdayDateKey);
+      window.localStorage.setItem(freezeAwardLogKey, JSON.stringify(log));
+    }
+    // --------------------------------
+
+    function isDayComplete(date) {
+      var dateKey = getDateKey(date);
+      if (dateKey < getDateKey(activityStartDate) || dateKey > getDateKey(today)) return false;
+      var dayTasks = tasksByDate[dateKey] || [];
+      return dayTasks.length > 0 && dayTasks.every(function (task) { return task.completed; });
+    }
+
+    // A semana agora vai de Domingo (início) a Sábado (fim).
+    function getSundayOfWeek(date) {
+      var d = new Date(date);
+      d.setDate(d.getDate() - d.getDay());
+      return d;
+    }
+
+    function getCompletedWorkdays(sunday) {
+      var completedDays = 0;
+      for (var day = 0; day <= 6; day += 1) { // 7 dias (Dom a Sáb)
+        var workday = new Date(sunday);
+        workday.setDate(sunday.getDate() + day);
+        if (workday.getTime() <= today.getTime() && isDayComplete(workday)) {
+          completedDays += 1;
+        }
+      }
+      return completedDays;
+    }
+
+    function getElapsedWorkdays(sunday) {
+      var elapsedDays = 0;
+      for (var day = 0; day <= 6; day += 1) {
+        var workday = new Date(sunday);
+        workday.setDate(sunday.getDate() + day);
+        if (workday.getTime() <= today.getTime()) {
+          elapsedDays += 1;
+        }
+      }
+      return elapsedDays;
+    }
+
+    function awardFreezeIfEligible() {
+      if (today.getDay() === 6) { // Se for Sábado
+        var sunday = getSundayOfWeek(today);
+        var completed = getCompletedWorkdays(sunday);
+        var saturdayKey = getDateKey(today);
+        
+        // 80% de 7 dias é aprox 5.6 dias. Vamos arredondar para 6 dias.
+        // Se preferir 5 dias de 7, mude o 6 para 5 abaixo.
+        if (completed >= 6 && !hasAwardedFreezeThisWeek(saturdayKey)) {
+          setFreezes(getFreezes() + 1);
+          logFreezeAward(saturdayKey);
+        }
+      }
+    }
+
+    function getCurrentStreak() {
+      var streak = 0;
+      var date = new Date(today);
+      if (!isDayComplete(date)) {
+         date.setDate(date.getDate() - 1);
+      }
+      
+      var virtualFreezes = getFreezes();
+
+      while (date.getTime() >= activityStartDate.getTime()) {
+        if (!isDayComplete(date)) {
+           if (virtualFreezes > 0) {
+             virtualFreezes -= 1; // Usa o congelamento
+             // O dia é perdoado, streak não aumenta, mas a contagem não zera.
+           } else {
+             break; // Quebra a sequência
+           }
+        } else {
+          streak += 1;
+        }
+        date.setDate(date.getDate() - 1);
+      }
+      return streak;
+    }
+
     function getDayStatus(date) {
       var dateKey = getDateKey(date);
-      if (dateKey > getDateKey(today)) {
-        return '';
-      }
+      if (dateKey > getDateKey(today)) return '';
       var dayTasks = tasksByDate[dateKey] || [];
-      if (isDayComplete(date)) {
-        return 'is-completed';
-      }
-      if (dayTasks.length > 0) {
-        return 'has-pending';
-      }
+      if (isDayComplete(date)) return 'is-completed';
+      if (dayTasks.length > 0) return 'has-pending';
       return '';
     }
 
@@ -152,49 +242,33 @@
       button.className = 'report-day ' + getDayStatus(date);
       button.dataset.date = getDateKey(date);
       button.setAttribute('aria-label', new Intl.DateTimeFormat('pt-BR', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
+        weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
       }).format(date));
       button.setAttribute('aria-pressed', String(isSelected));
-      if (isCurrentDay) {
-        button.classList.add('is-today');
-      }
-      if (isSelected) {
-        button.classList.add('is-selected');
-      }
-      if (date.getTime() < today.getTime()) {
-        button.classList.add('is-elapsed');
-      }
+      if (isCurrentDay) button.classList.add('is-today');
+      if (isSelected) button.classList.add('is-selected');
+      if (date.getTime() < today.getTime()) button.classList.add('is-elapsed');
       button.textContent = String(date.getDate());
+
       var nextDate = new Date(date);
       nextDate.setDate(nextDate.getDate() + 1);
       if (isDayComplete(date) && isDayComplete(nextDate)) {
         var streakConnector = document.createElement('span');
         streakConnector.className = 'report-day-streak-connector';
-        streakConnector.setAttribute('aria-hidden', 'true');
         button.appendChild(streakConnector);
       }
+
       if (isDayComplete(date)) {
         var fireIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         fireIcon.setAttribute('class', 'report-day-streak-icon');
         fireIcon.setAttribute('viewBox', '0 0 24 24');
-        fireIcon.setAttribute('aria-hidden', 'true');
         var iconBacking = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-        iconBacking.setAttribute('cx', '12');
-        iconBacking.setAttribute('cy', '12');
-        iconBacking.setAttribute('r', '11');
-        iconBacking.setAttribute('fill', '#123b46');
-        iconBacking.setAttribute('stroke', '#ffffff');
-        iconBacking.setAttribute('stroke-width', '1.25');
+        iconBacking.setAttribute('cx', '12'); iconBacking.setAttribute('cy', '12'); iconBacking.setAttribute('r', '11');
+        iconBacking.setAttribute('fill', '#123b46'); iconBacking.setAttribute('stroke', '#ffffff'); iconBacking.setAttribute('stroke-width', '1.25');
         fireIcon.appendChild(iconBacking);
 
         var flame = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        flame.setAttribute('fill', '#ff6b1a');
-        flame.setAttribute('stroke', '#762900');
-        flame.setAttribute('stroke-width', '0.7');
-        flame.setAttribute('stroke-linejoin', 'round');
+        flame.setAttribute('fill', '#ff6b1a'); flame.setAttribute('stroke', '#762900'); flame.setAttribute('stroke-width', '0.7'); flame.setAttribute('stroke-linejoin', 'round');
         flame.setAttribute('d', 'M12 3c.55 3.1-.62 5.28-2.44 7.42C8.18 12.05 7 13.5 7 15.2a5 5 0 0 0 10 0c0-2.56-1.36-4.57-3.34-6.82C13.37 8.06 12.44 5.06 12 3Z');
         fireIcon.appendChild(flame);
 
@@ -216,184 +290,92 @@
         } else {
           var emptyCell = document.createElement('span');
           emptyCell.className = 'report-day-placeholder';
-          emptyCell.setAttribute('aria-hidden', 'true');
           week.appendChild(emptyCell);
         }
       });
-
       return week;
-    }
-
-    function isDayComplete(date) {
-      var dateKey = getDateKey(date);
-      if (dateKey < getDateKey(activityStartDate) ||
-          dateKey > getDateKey(today)) {
-        return false;
-      }
-      var dayTasks = tasksByDate[dateKey] || [];
-      return dayTasks.length > 0 && dayTasks.every(function (task) { return task.completed; });
-    }
-
-    function getCompletedWorkdays(sunday) {
-      if (sunday.getDay() !== 0) {
-        return 0;
-      }
-
-      var monday = new Date(sunday);
-      monday.setDate(monday.getDate() - 6);
-      var completedDays = 0;
-      for (var day = 0; day < 6; day += 1) {
-        var workday = new Date(monday);
-        workday.setDate(monday.getDate() + day);
-        if (workday.getTime() < today.getTime() && isDayComplete(workday)) {
-          completedDays += 1;
-        }
-      }
-      return completedDays;
-    }
-
-    function getElapsedWorkdays(sunday) {
-      if (sunday.getDay() !== 0) {
-        return 0;
-      }
-
-      var monday = new Date(sunday);
-      monday.setDate(monday.getDate() - 6);
-      var elapsedDays = 0;
-      for (var day = 0; day < 6; day += 1) {
-        var workday = new Date(monday);
-        workday.setDate(monday.getDate() + day);
-        if (workday.getTime() < today.getTime()) {
-          elapsedDays += 1;
-        }
-      }
-      return elapsedDays;
-    }
-
-    function hasEarnedRestDay(sunday) {
-      return getCompletedWorkdays(sunday) >= 5;
-    }
-
-    function getWeekEndingSunday(date) {
-      var sunday = new Date(date);
-      sunday.setDate(sunday.getDate() + ((7 - sunday.getDay()) % 7));
-      return sunday;
-    }
-
-    function getCurrentStreak() {
-      var streak = 0;
-      var date = new Date(today);
-      date.setDate(date.getDate() - 1);
-
-      while (date.getTime() >= activityStartDate.getTime()) {
-        if (date.getDay() === 0) {
-          if (hasEarnedRestDay(date)) {
-            date.setDate(date.getDate() - 1);
-            continue;
-          }
-          break;
-        }
-        if (!isDayComplete(date)) {
-          if (!hasEarnedRestDay(getWeekEndingSunday(date))) {
-            break;
-          }
-        } else {
-          streak += 1;
-        }
-        date.setDate(date.getDate() - 1);
-      }
-
-      return streak;
     }
 
     function updateSummary() {
       var visibleMonthPrefix = visibleMonth.getFullYear() + '-' + padNumber(visibleMonth.getMonth() + 1) + '-';
-      var hasMonthTasks = Object.keys(tasksByDate).some(function (dateKey) {
-        return dateKey.indexOf(visibleMonthPrefix) === 0 && tasksByDate[dateKey].length > 0;
-      });
-      var hasAnyTasks = Object.keys(tasksByDate).some(function (dateKey) {
-        return tasksByDate[dateKey].length > 0;
-      });
-      var completedWeekDays = getCompletedWorkdays(getWeekEndingSunday(today));
-      var elapsedWeekDays = getElapsedWorkdays(getWeekEndingSunday(today));
-      var completionRate = Math.round((completedWeekDays / 6) * 100);
-      var hasEarnedRestThisWeek = elapsedWeekDays === 6 && completedWeekDays >= 5;
+      var hasMonthTasks = Object.keys(tasksByDate).some(function (key) { return key.indexOf(visibleMonthPrefix) === 0 && tasksByDate[key].length > 0; });
+      var hasAnyTasks = Object.keys(tasksByDate).some(function (key) { return tasksByDate[key].length > 0; });
+      
+      var sunday = getSundayOfWeek(today);
+      var completedWeekDays = getCompletedWorkdays(sunday);
+      var elapsedWeekDays = getElapsedWorkdays(sunday);
+      var totalDaysInWeek = 7; 
+      var completionRate = Math.round((completedWeekDays / totalDaysInWeek) * 100);
+
+      // Zera a contagem visual aos domingos.
+      if (today.getDay() === 0) {
+        completedWeekDays = isDayComplete(today) ? 1 : 0;
+        completionRate = Math.round((completedWeekDays / totalDaysInWeek) * 100);
+      }
 
       emptyState.hidden = hasMonthTasks;
       emptyAddButton.hidden = hasMonthTasks;
       stats.hidden = !hasMonthTasks;
+      emptyState.hidden = hasMonthTasks;
+      emptyAddButton.hidden = hasMonthTasks;
+      stats.hidden = !hasMonthTasks;
+      feedback.hidden = !hasAnyTasks;
+      if (freezesContainer) freezesContainer.style.display = hasMonthTasks ? 'flex' : 'none';
       feedback.hidden = !hasAnyTasks;
 
       completedCount.textContent = String(completedWeekDays);
-      completedTotal.textContent = '/ 6';
+      completedTotal.textContent = '/ 7';
       progressRing.style.setProperty('--report-progress', completionRate + '%');
       streakCount.textContent = String(getCurrentStreak());
+      if(freezeCountElement) freezeCountElement.textContent = String(getFreezes());
 
-      mood.classList.remove(
-        'report-mood-good',
-        'report-mood-medium',
-        'report-mood-low',
-        'report-mood-persistence'
-      );
-      if (elapsedWeekDays < 6) {
+      mood.classList.remove('report-mood-good', 'report-mood-medium', 'report-mood-low', 'report-mood-persistence');
+      
+      // O feedback é mostrado SOMENTE NO SÁBADO.
+      if (today.getDay() === 6) {
+        if (completedWeekDays >= 6) { // 80% de 7 dias aprox 6
+          mood.classList.add('report-mood-good');
+          moodIcon.className = 'mdi mdi-emoticon-happy';
+          performanceTitle.textContent = 'Parabéns!';
+          performanceMessage.textContent = 'Boa frequência! Você concluiu ' + completedWeekDays + ' de 7 dias nesta semana e ganhou um Congelamento.';
+        } else if (completedWeekDays >= 4) {
+          mood.classList.add('report-mood-medium');
+          moodIcon.className = 'mdi mdi-emoticon-neutral';
+          performanceTitle.textContent = 'Frequência mediana';
+          performanceMessage.textContent = 'Você concluiu ' + completedWeekDays + ' de 7 dias nesta semana.';
+        } else {
+          mood.classList.add('report-mood-low');
+          moodIcon.className = 'mdi mdi-emoticon-sad';
+          performanceTitle.textContent = 'Frequência baixa';
+          performanceMessage.textContent = 'Você concluiu ' + completedWeekDays + ' de 7 dias nesta semana. Melhore para ganhar congelamentos!';
+        }
+      } else {
         mood.classList.add('report-mood-persistence');
         moodIcon.className = 'mdi mdi-emoticon-outline';
         performanceTitle.textContent = 'Persistência';
-        performanceMessage.textContent = 'A frequência da semana será avaliada após o fim dos seis dias. Continue no seu ritmo.';
-      } else if (hasEarnedRestThisWeek) {
-        mood.classList.add('report-mood-good');
-        moodIcon.className = 'mdi mdi-emoticon-happy';
-        performanceTitle.textContent = 'Descanso merecido!';
-        performanceMessage.textContent = 'Boa frequência: você concluiu ' + completedWeekDays +
-          ' de 6 dias nesta semana. Aproveite seu descanso: sua sequência está mantida.';
-      } else if (completedWeekDays >= 3) {
-        mood.classList.add('report-mood-medium');
-        moodIcon.className = 'mdi mdi-emoticon-neutral';
-        performanceTitle.textContent = 'Frequência mediana';
-        performanceMessage.textContent = 'Você concluiu ' + completedWeekDays +
-          ' de 6 dias nesta semana. Continue avançando para alcançar uma boa frequência.';
-      } else {
-        mood.classList.add('report-mood-low');
-        moodIcon.className = 'mdi mdi-emoticon-sad';
-        performanceTitle.textContent = 'Frequência baixa';
-        performanceMessage.textContent = 'Você concluiu ' + completedWeekDays +
-          ' de 6 dias nesta semana. Retome suas tarefas para melhorar sua frequência.';
+        performanceMessage.textContent = 'Continue no ritmo! O feedback da semana sairá no sábado.';
       }
 
       if (!hasMonthTasks) {
-        emptyTitle.textContent = hasAnyTasks
-          ? 'Nenhuma atividade neste mês'
-          : 'Seu relatório começa com uma tarefa';
-        emptyMessage.textContent = hasAnyTasks
-          ? 'Não há tarefas registradas neste mês. Escolha outro mês no calendário ou adicione uma tarefa.'
-          : 'Adicione uma tarefa para começar a acompanhar seu progresso e ver seus dados aqui.';
-        return;
+        emptyTitle.textContent = hasAnyTasks ? 'Nenhuma atividade neste mês' : 'Seu relatório começa com uma tarefa';
+        emptyMessage.textContent = hasAnyTasks ? 'Escolha outro mês no calendário ou adicione uma tarefa.' : 'Adicione uma tarefa para começar a acompanhar seu progresso.';
       }
     }
 
     function refreshToday() {
       var currentDate = new Date();
       currentDate.setHours(0, 0, 0, 0);
-      if (currentDate.getTime() === today.getTime()) {
-        return;
-      }
-
+      if (currentDate.getTime() === today.getTime()) return;
       var previousToday = today;
       today = currentDate;
-      if (selectedDate.getTime() === previousToday.getTime()) {
-        selectedDate = new Date(today);
-      }
-      if (visibleMonth.getFullYear() === previousToday.getFullYear() &&
-          visibleMonth.getMonth() === previousToday.getMonth()) {
+      if (selectedDate.getTime() === previousToday.getTime()) selectedDate = new Date(today);
+      if (visibleMonth.getFullYear() === previousToday.getFullYear() && visibleMonth.getMonth() === previousToday.getMonth()) {
         visibleMonth = new Date(today.getFullYear(), today.getMonth(), 1);
       }
     }
 
     function scheduleDayRollover() {
-      if (dayRolloverTimer !== null) {
-        window.clearTimeout(dayRolloverTimer);
-      }
-
+      if (dayRolloverTimer !== null) window.clearTimeout(dayRolloverTimer);
       var nextDay = new Date();
       nextDay.setHours(24, 0, 0, 50);
       dayRolloverTimer = window.setTimeout(function () {
@@ -404,10 +386,7 @@
 
     function changeMonth(offset) {
       visibleMonth.setMonth(visibleMonth.getMonth() + offset);
-      var targetDay = Math.min(
-        selectedDate.getDate(),
-        new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0).getDate()
-      );
+      var targetDay = Math.min(selectedDate.getDate(), new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0).getDate());
       selectedDate = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), targetDay);
       renderReport(offset);
     }
@@ -416,20 +395,16 @@
       refreshToday();
       tasksByDate = loadReportTasks();
       activityStartDate = getActivityStartDate();
+      awardFreezeIfEligible(); // Checa se é sábado para dar prêmio
+
       monthTitle.textContent = getMonthTitle(visibleMonth);
       calendarGrid.replaceChildren();
 
-      var daysInMonth = new Date(
-        visibleMonth.getFullYear(),
-        visibleMonth.getMonth() + 1,
-        0
-      ).getDate();
+      var daysInMonth = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0).getDate();
       var firstWeekday = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1).getDay();
       var weekDates = [];
 
-      for (var blank = 0; blank < firstWeekday; blank += 1) {
-        weekDates.push(null);
-      }
+      for (var blank = 0; blank < firstWeekday; blank += 1) weekDates.push(null);
 
       for (var day = 1; day <= daysInMonth; day += 1) {
         weekDates.push(new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), day));
@@ -440,9 +415,7 @@
       }
 
       if (weekDates.length > 0) {
-        while (weekDates.length < 7) {
-          weekDates.push(null);
-        }
+        while (weekDates.length < 7) weekDates.push(null);
         calendarGrid.appendChild(createWeek(weekDates));
       }
 
@@ -452,92 +425,48 @@
       if (animationDirection) {
         calendarGrid.classList.remove('report-month-enter-next', 'report-month-enter-previous');
         void calendarGrid.offsetWidth;
-        calendarGrid.classList.add(
-          animationDirection > 0 ? 'report-month-enter-next' : 'report-month-enter-previous'
-        );
+        calendarGrid.classList.add(animationDirection > 0 ? 'report-month-enter-next' : 'report-month-enter-previous');
       }
     }
 
     pageRoot.addEventListener('report:refresh', renderReport);
-    document.addEventListener('visibilitychange', function () {
-      if (document.visibilityState === 'visible') {
-        renderReport();
-      }
-    });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') renderReport(); });
     window.addEventListener('focus', renderReport);
     document.addEventListener('resume', renderReport);
-    window.addEventListener('storage', function (event) {
-      if (event.key && event.key.indexOf(storagePrefix) === 0) {
-        renderReport();
-      }
-    });
+    window.addEventListener('storage', function (event) { if (event.key && event.key.indexOf(storagePrefix) === 0) renderReport(); });
 
+    // Lógica de swiping do calendário mantida idêntica...
     var pointerStart = null;
     var suppressCalendarClick = false;
 
     calendarGrid.addEventListener('pointerdown', function (event) {
-      if (event.isPrimary && event.pointerType !== 'touch') {
-        pointerStart = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
-      }
+      if (event.isPrimary && event.pointerType !== 'touch') pointerStart = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
     });
 
     calendarGrid.addEventListener('pointerup', function (event) {
-      if (event.pointerType === 'touch' || !pointerStart ||
-          event.pointerId !== pointerStart.pointerId) {
-        return;
-      }
-
+      if (event.pointerType === 'touch' || !pointerStart || event.pointerId !== pointerStart.pointerId) return;
       handleCalendarSwipe(pointerStart.x, pointerStart.y, event.clientX, event.clientY);
       pointerStart = null;
     });
 
-    calendarGrid.addEventListener('pointercancel', function () {
-      pointerStart = null;
-    });
-
+    calendarGrid.addEventListener('pointercancel', function () { pointerStart = null; });
     calendarGrid.addEventListener('touchstart', function (event) {
-      if (event.touches.length === 1) {
-        pointerStart = {
-          x: event.touches[0].clientX,
-          y: event.touches[0].clientY,
-          pointerId: 'touch'
-        };
-      } else {
-        pointerStart = null;
-      }
+      if (event.touches.length === 1) pointerStart = { x: event.touches[0].clientX, y: event.touches[0].clientY, pointerId: 'touch' };
+      else pointerStart = null;
     }, { passive: true });
-
     calendarGrid.addEventListener('touchend', function (event) {
-      if (!pointerStart || pointerStart.pointerId !== 'touch' ||
-          event.changedTouches.length !== 1) {
-        return;
-      }
-
-      handleCalendarSwipe(
-        pointerStart.x,
-        pointerStart.y,
-        event.changedTouches[0].clientX,
-        event.changedTouches[0].clientY
-      );
+      if (!pointerStart || pointerStart.pointerId !== 'touch' || event.changedTouches.length !== 1) return;
+      handleCalendarSwipe(pointerStart.x, pointerStart.y, event.changedTouches[0].clientX, event.changedTouches[0].clientY);
       pointerStart = null;
     }, { passive: true });
-
-    calendarGrid.addEventListener('touchcancel', function () {
-      pointerStart = null;
-    }, { passive: true });
+    calendarGrid.addEventListener('touchcancel', function () { pointerStart = null; }, { passive: true });
 
     function handleCalendarSwipe(startX, startY, endX, endY) {
       var horizontalDistance = endX - startX;
       var verticalDistance = endY - startY;
-      if (Math.abs(horizontalDistance) < 50 ||
-          Math.abs(horizontalDistance) < Math.abs(verticalDistance) * 1.25) {
-        return;
-      }
-
+      if (Math.abs(horizontalDistance) < 50 || Math.abs(horizontalDistance) < Math.abs(verticalDistance) * 1.25) return;
       suppressCalendarClick = true;
-      window.setTimeout(function () {
-        suppressCalendarClick = false;
-      }, 500);
+      window.setTimeout(function () { suppressCalendarClick = false; }, 500);
       changeMonth(horizontalDistance < 0 ? 1 : -1);
     }
 
@@ -558,10 +487,7 @@
 
     calendarGrid.addEventListener('click', function (event) {
       var button = event.target.closest('.report-day');
-      if (!button || !calendarGrid.contains(button)) {
-        return;
-      }
-
+      if (!button || !calendarGrid.contains(button)) return;
       var parts = button.dataset.date.split('-').map(Number);
       selectedDate = new Date(parts[0], parts[1] - 1, parts[2]);
       renderReport();
@@ -571,16 +497,12 @@
       event.preventDefault();
       var taskDateKey = getDateKey(selectedDate);
       if (taskDateKey < getDateKey(today)) {
-        app.dialog.alert('Não é possível adicionar tarefas a dias anteriores. Registre as tarefas no dia em que forem realizadas.');
+        app.dialog.alert('Não é possível adicionar tarefas a dias anteriores.');
         return;
       }
       app.dialog.prompt('Digite a tarefa para este dia:', 'Nova tarefa', function (value) {
-        var title = typeof value === 'string'
-          ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim()
-          : '';
-        if (!title) {
-          return;
-        }
+        var title = typeof value === 'string' ? value.replace(/[\u0000-\u001f\u007f-\u009f]/g, '').trim() : '';
+        if (!title) return;
         if (title.length > maxTaskTitleLength) {
           app.dialog.alert('A tarefa deve ter no máximo ' + maxTaskTitleLength + ' caracteres.');
           return;
@@ -589,38 +511,33 @@
         var currentDate = new Date();
         currentDate.setHours(0, 0, 0, 0);
         if (taskDateKey < getDateKey(currentDate)) {
-          app.dialog.alert('Não é possível adicionar tarefas a dias anteriores. Registre as tarefas no dia em que forem realizadas.');
+          app.dialog.alert('Não é possível adicionar tarefas a dias anteriores.');
           return;
         }
 
-        var dateKey = taskDateKey;
-        var dayStorageKey = storagePrefix + dateKey;
-        var previousTasks = tasksByDate[dateKey] || [];
+        var dayStorageKey = storagePrefix + taskDateKey;
+        var previousTasks = tasksByDate[taskDateKey] || [];
         var nextTasks = previousTasks.concat({ title: title, completed: false });
 
         try {
           window.localStorage.setItem(dayStorageKey, JSON.stringify(nextTasks));
         } catch (error) {
-          app.dialog.alert('Não foi possível salvar a tarefa. Verifique o espaço disponível no dispositivo.');
+          app.dialog.alert('Não foi possível salvar a tarefa.');
           return;
         }
 
-        tasksByDate[dateKey] = nextTasks;
+        tasksByDate[taskDateKey] = nextTasks;
         renderReport();
       });
     }
 
     emptyAddButton.addEventListener('click', openAddTaskDialog);
-
     renderReport();
   };
 
   window.refreshReport = function (pageElement) {
     var page = pageElement && pageElement.el ? pageElement.el : pageElement;
-    var pageRoot = page && page.matches && page.matches('.report-page')
-      ? page
-      : page && page.querySelector('.report-page');
-
+    var pageRoot = page && page.matches && page.matches('.report-page') ? page : page && page.querySelector('.report-page');
     if (pageRoot && pageRoot.dataset.reportInitialized === 'true') {
       pageRoot.dispatchEvent(new Event('report:refresh'));
     }

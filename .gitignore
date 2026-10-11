@@ -28,3 +28,5 @@ node_modules/
 .DS_Store
 Thumbs.db
 /build/
+blueday.keystore
+build.json
