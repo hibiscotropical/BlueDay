@@ -1374,37 +1374,6 @@ body::-webkit-scrollbar,
     margin: 0;
 }
 
-#settings-backup-password {
-    width: 100%;
-    min-height: 50px;
-    padding: 0 14px;
-    border: 3px solid #72b7ff !important;
-    border-radius: 10px;
-    background: #102a37;
-    color: #f5f8fa;
-    font: inherit;
-    box-shadow: 0 0 0 3px rgb(45 115 236 / 24%);
-}
-
-.settings-backup-password-label {
-    color: #a9d4ff;
-    font-weight: 800;
-}
-
-.settings-backup-password::placeholder {
-    color: #aab9c0;
-    opacity: 1;
-}
-
-#settings-backup-password:focus {
-    border-color: #a9d4ff;
-    box-shadow: 0 0 0 4px rgb(45 115 236 / 32%);
-}
-
-#settings-backup-password:focus-visible {
-    outline: 2px solid #fff;
-    outline-offset: 2px;
-}
 
 .dialog .settings-backup-password-prompt {
     box-sizing: border-box;
