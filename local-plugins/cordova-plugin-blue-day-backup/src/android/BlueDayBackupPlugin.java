@@ -93,7 +93,7 @@ public class BlueDayBackupPlugin extends CordovaPlugin {
     private String saveWithMediaStore(String contents, String fileName) throws Exception {
         ContentValues values = new ContentValues();
         values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
-        values.put(MediaStore.Downloads.MIME_TYPE, "application/json");
+        values.put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream");
         values.put(MediaStore.Downloads.RELATIVE_PATH,
                 Environment.DIRECTORY_DOWNLOADS + File.separator + DOWNLOAD_DIRECTORY);
         values.put(MediaStore.Downloads.IS_PENDING, 1);

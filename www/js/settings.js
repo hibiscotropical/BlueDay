@@ -323,15 +323,77 @@
     });
   }
 
-  function getAllowedBackupPasswords() {
-    var snapshot = getAppStorageSnapshot();
-    if (!snapshot[recurringStorageKey]) {
-      return [];
+  // --- NOVA LÓGICA ZERO-KNOWLEDGE DE EXPORTAÇÃO ---
+  function exportBackup() {
+    var passwordDialog = app.dialog.prompt(
+      'Crie uma palavra-passe forte para proteger este backup. Precisará dela para restaurar os dados.',
+      'Proteger Backup',
+      function (password) {
+        if (!password || password.trim().length < 8) {
+          showError('A palavra-passe deve ter pelo menos 8 caracteres.');
+          return;
+        }
+        processExport(password.trim());
+      }
+    );
+    
+    // Transforma o campo de texto num campo de password oculto
+    var passwordField = passwordDialog && passwordDialog.$el && passwordDialog.$el.find('input');
+    if (passwordField && passwordField.length) {
+      passwordField.attr('type', 'password');
+      passwordField.attr('autocomplete', 'new-password');
     }
-    return validateRecurringTasks(JSON.parse(snapshot[recurringStorageKey]))
-      .slice(0, 3)
-      .map(function (routine) { return { title: routine.title }; });
   }
+
+  function processExport(password) {
+    var backup;
+    try {
+      backup = {
+        format: 'day-list-backup',
+        version: 1,
+        createdAt: new Date().toISOString(),
+        data: getAppStorageSnapshot()
+      };
+    } catch (error) {
+      showError(error.message || 'Não foi possível aceder aos dados para criar o backup.');
+      return;
+    }
+
+    Promise.resolve().then(function () {
+      return encryptBackup(backup, password);
+    }).then(function (encryptedBackup) {
+      var backupContents = JSON.stringify(encryptedBackup, null, 2);
+      var blob = new Blob([backupContents], { type: 'application/octet-stream' });
+      if (blob.size > maxBackupFileSize) {
+        throw new Error('O backup gerado excede o limite de 10 MB. Reduza os dados salvos e tente novamente.');
+      }
+
+      if (window.cordova && window.cordova.platformId === 'android') {
+        return saveBackupToAndroid(backupContents).then(function (savedPath) {
+          showError('Backup salvo em ' + savedPath + '.');
+        });
+      }
+
+      if (typeof File === 'function' && navigator.canShare && navigator.share) {
+        var file = new File([blob], 'day-list-backup.enc', { type: 'application/octet-stream' });
+        if (navigator.canShare({ files: [file] })) {
+          return navigator.share({ title: 'Backup da Lista de Tarefas', files: [file] }).catch(function (error) {
+            if (error.name === 'AbortError') {
+              return;
+            }
+            downloadBackupFile(blob);
+          });
+        }
+      }
+
+      downloadBackupFile(blob);
+    }).catch(function (error) {
+      if (error.name !== 'AbortError') {
+        showError(error.message || 'Não foi possível encriptar o backup.');
+      }
+    });
+  }
+  // ------------------------------------------------
 
   function getCryptoApi() {
     if (!window.crypto || !window.crypto.subtle ||
@@ -793,69 +855,6 @@
     return true;
   }
 
-  function exportBackup(passwordInput) {
-    var backup;
-    var password = passwordInput ? passwordInput.value.trim() : '';
-    try {
-      var allowedPasswords = getAllowedBackupPasswords();
-      if (!allowedPasswords.length) {
-        throw new Error('Cadastre uma tarefa padrão personalizada antes de criar um backup protegido por senha.');
-      }
-      if (allowedPasswords.every(function (task) { return task.title !== password.trim(); })) {
-        throw new Error('A senha deve ser exatamente o título de uma das três tarefas padrão personalizadas exibidas nesta seção.');
-      }
-      backup = {
-        format: 'day-list-backup',
-        version: 1,
-        createdAt: new Date().toISOString(),
-        data: getAppStorageSnapshot()
-      };
-    } catch (error) {
-      showError(error.message || 'Não foi possível acessar os dados para criar o backup.');
-      if (passwordInput) {
-        passwordInput.value = '';
-      }
-      return;
-    }
-    Promise.resolve().then(function () {
-      return encryptBackup(backup, password);
-    }).then(function (encryptedBackup) {
-      var backupContents = JSON.stringify(encryptedBackup, null, 2);
-      var blob = new Blob([backupContents], { type: 'application/octet-stream' });
-      if (blob.size > maxBackupFileSize) {
-        throw new Error('O backup gerado excede o limite de 10 MB. Reduza os dados salvos e tente novamente.');
-      }
-
-      if (window.cordova && window.cordova.platformId === 'android') {
-        return saveBackupToAndroid(backupContents).then(function (savedPath) {
-          showError('Backup salvo em ' + savedPath + '.');
-        });
-      }
-
-      if (typeof File === 'function' && navigator.canShare && navigator.share) {
-        var file = new File([blob], 'day-list-backup.enc', { type: 'application/octet-stream' });
-        if (navigator.canShare({ files: [file] })) {
-          return navigator.share({ title: 'Backup da Lista de Tarefas', files: [file] }).catch(function (error) {
-            if (error.name === 'AbortError') {
-              return;
-            }
-            downloadBackupFile(blob);
-          });
-        }
-      }
-
-      downloadBackupFile(blob);
-    }).catch(function (error) {
-      if (error.name !== 'AbortError') {
-        showError(error.message || 'Não foi possível criptografar o backup.');
-      }
-    }).then(function () {
-      if (passwordInput) {
-        passwordInput.value = '';
-      }
-    });
-  }
-
   function initializeSettings(pageElement) {
     var page = pageElement && pageElement.el ? pageElement.el : pageElement;
     var pageRoot = page && page.matches && page.matches('.settings-page')
@@ -879,11 +878,11 @@
     var backupPasswordHint = pageRoot.querySelector('.settings-backup-password-hint');
     var notificationTestButton = pageRoot.querySelector('.settings-notification-test');
     var notificationTestStatus = pageRoot.querySelector('.settings-notification-test-status');
+
     if (!profileName || !profileEditor || !accountAvatar ||
         !profileButton || !saveProfileButton || !avatarChoices.length ||
         !deleteDataButton || !backupInput || !exportButton || !importButton ||
-        !backupPassword || !backupPasswordHint || !notificationTestButton ||
-        !notificationTestStatus) {
+        !notificationTestButton || !notificationTestStatus) {
       throw new Error('Não foi possível inicializar as configurações da conta.');
     }
 
@@ -917,22 +916,15 @@
       var profile = readProfile();
       profileName.value = profile.name;
       selectAvatar(profile.avatar);
-      try {
-        var passwordTasks = getAllowedBackupPasswords();
-        backupPasswordHint.textContent = passwordTasks.length
-          ? 'Senhas permitidas (até 3 tarefas padrão): ' + passwordTasks.map(function (task) {
-            return '“' + task.title + '”';
-          }).join(', ') + '.'
-          : 'Cadastre pelo menos uma tarefa padrão personalizada para definir uma senha de backup.';
-      } catch (error) {
-        backupPasswordHint.textContent = 'Não foi possível ler as tarefas padrão para definir a senha.';
-        console.error('Não foi possível carregar as tarefas padrão para o backup.', error);
+      
+      if (backupPasswordHint) {
+         backupPasswordHint.textContent = 'Uma palavra-passe será solicitada ao exportar. Crie uma senha de pelo menos 8 dígitos.';
       }
     }
 
     function clearBackupImportState() {
       backupInput.value = '';
-      backupPassword.value = '';
+      if (backupPassword) { backupPassword.value = ''; }
     }
 
     function confirmBackupRestore(validatedData) {
@@ -1046,8 +1038,9 @@
     });
 
     exportButton.addEventListener('click', function () {
-      exportBackup(backupPassword);
+      exportBackup();
     });
+
     profileButton.addEventListener('click', function () {
       var isOpening = profileEditor.hidden;
       profileEditor.hidden = !isOpening;
@@ -1094,6 +1087,7 @@
     importButton.addEventListener('click', function () {
       backupInput.click();
     });
+    
     renderSettings();
   }
 
