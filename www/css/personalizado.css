@@ -1369,12 +1369,9 @@ body::-webkit-scrollbar,
     align-items: center;
     gap: 9px;
 }
-
 .settings-accordion-content p {
     margin: 0;
 }
-
-
 .dialog .settings-backup-password-prompt {
     box-sizing: border-box;
     min-height: 44px;
