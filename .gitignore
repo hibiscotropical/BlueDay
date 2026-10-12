@@ -28,5 +28,15 @@ node_modules/
 .DS_Store
 Thumbs.db
 /build/
+
+# Chaves e Identidades Criptográficas
+*.keystore
+*.jks
+*.p12
+*.pem
 blueday.keystore
 build.json
+#binários e assinaturas finais
+*.apk
+*.aab
+*idsig
