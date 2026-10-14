@@ -1,15 +1,22 @@
 <?xml version='1.0' encoding='utf-8'?>
-<widget id="br.com.daylist" version="1.0.7" android-versionCode="10024" xmlns="http://www.w3.org/ns/widgets" xmlns:android="http://schemas.android.com/apk/res/android" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+<widget id="br.com.daylist" version="1.0.8" android-versionCode="10025" xmlns="http://www.w3.org/ns/widgets" xmlns:android="http://schemas.android.com/apk/res/android" xmlns:cdv="http://cordova.apache.org/ns/1.0">
     <name>Blue Day</name>
     <description>
         Um simples app de organizar as suas tarefas por dias da semana, com a possibilidade de adicionar, remover e marcar como concluídas.
     </description>
     <author email="dev@cordova.apache.org" href="https://cordova.apache.org">
-        Hibisco Team
+        Hibisco Tropical
     </author>
     <icon src="www/img/app-logo.png" />
     <preference name="AndroidWindowSplashScreenAnimatedIcon" value="www/img/blueday-splash.png" />
     <content src="index.html" />
     <allow-intent href="http://*/*" />
     <allow-intent href="https://*/*" />
+    <platform name="android">
+    <config-file parent="/*" target="AndroidManifest.xml">
+        <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+        <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+        <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    </config-file>
+</platform>
 </widget>

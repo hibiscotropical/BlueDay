@@ -1,6 +1,13 @@
-:root{
+/* ==========================================
+   1. VARIÁVEIS & CONFIGURAÇÕES GLOBAIS
+   ========================================== */
+:root {
     --active-menu-bg: #E3F2FD;
     --active-menu-color: #1E88E5; 
+    --primary-blue: #087af0;
+    --primary-blue-hover: #0665cc;
+    --bg-dark: #123b46;
+    --card-bg: #151c29;
 }
 
 html,
@@ -18,53 +25,59 @@ body::-webkit-scrollbar,
     background: transparent;
 }
 
-.user-area{
+/* ==========================================
+   2. PAINEL LATERAL & ÁREA DO UTILIZADOR
+   ========================================== */
+.user-area {
     display: flex;
     flex-flow: column wrap;
-    margin:0;
+    margin: 0;
     height: 175px;   
-    border-bottom:1px solid #eee;
+    border-bottom: 1px solid #eee;
     margin-bottom: 20px;
 }
 
-.user-area img{
-    border:1px solid #eee;
-    margin-top:20px;
+.user-area img {
+    border: 1px solid #eee;
+    margin-top: 20px;
     width: 60px;
     height: 60px;
     border-radius: 50%;
 }
 
-.user-area strong{
+.user-area strong {
     width: 100%;
-    font-size:20px;
+    font-size: 20px;
     margin-top: 20px;
     white-space: nowrap;                  
     overflow: hidden;
-    text-overflow:    ellipsis;
+    text-overflow: ellipsis;
 }
 
-.item-panel{
+.item-panel {
     width: 95%;
     margin: auto;  
 }
 
-.item-panel.active{    
+.item-panel.active {    
     background: var(--active-menu-bg);
     color: var(--active-menu-color);
     font-weight: bolder; 
-    border-radius:5px;  
+    border-radius: 5px;  
 }
 
-.item-panel.active .item-title{
+.item-panel.active .item-title {
     font-weight: bold;
 }
 
-.item-media svg{
+.item-media svg {
     width: 22px;
     height: 22px;
 }
 
+/* ==========================================
+   3. PÁGINA DE TAREFAS (NAVBAR & LAYOUT)
+   ========================================== */
 .task-page {
     --f7-navbar-height: 88px;
     --f7-page-bg-color: #123b46;
@@ -178,6 +191,9 @@ body::-webkit-scrollbar,
     box-sizing: border-box;
 }
 
+/* ==========================================
+   4. CALENDÁRIO & SELEÇÃO DE DIAS
+   ========================================== */
 .task-calendar {
     flex: 0 0 auto;
 }
@@ -225,7 +241,6 @@ body::-webkit-scrollbar,
     justify-content: center;
     gap: 4px;
     padding: 0;
-    border: 0;
     border: 1px solid rgb(151 193 200 / 5%);
     border-radius: 15px;
     background: rgb(94 143 151 / 20%);
@@ -290,6 +305,9 @@ body::-webkit-scrollbar,
     line-height: 18px;
 }
 
+/* ==========================================
+   5. LISTA DE TAREFAS & CARDS
+   ========================================== */
 .task-items {
     display: flex;
     flex-direction: column;
@@ -303,7 +321,7 @@ body::-webkit-scrollbar,
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 12px;
     padding: 10px 12px;
     border: 1px solid #202a3a;
     border-radius: 12px;
@@ -311,12 +329,23 @@ body::-webkit-scrollbar,
     color: #e1e5ed;
     font-size: 13px;
     line-height: 18px;
+    box-sizing: border-box;
+}
+
+.task-item.task-priority-alta {
+    border-left: 4px solid #f44336;
+}
+.task-item.task-priority-media {
+    border-left: 4px solid #ff9800;
+}
+.task-item.task-priority-baixa {
+    border-left: 4px solid #4caf50;
 }
 
 .task-completion {
     display: flex;
     min-width: 0;
-    flex: 1;
+    flex: 0 0 auto;
     align-items: center;
     gap: 10px;
     cursor: pointer;
@@ -329,10 +358,6 @@ body::-webkit-scrollbar,
 .task-completion.is-completion-disabled .task-checkmark {
     border-color: #59616f;
     background: #252c38;
-    color: #aab2c0;
-}
-
-.task-completion.is-completion-disabled .task-title {
     color: #aab2c0;
 }
 
@@ -365,11 +390,6 @@ body::-webkit-scrollbar,
     font-weight: 700;
 }
 
-.task-checkbox:focus-visible + .task-checkmark {
-    outline: 2px solid #8ab4ff;
-    outline-offset: 2px;
-}
-
 .task-text {
     display: flex;
     min-width: 0;
@@ -377,11 +397,23 @@ body::-webkit-scrollbar,
     flex-direction: column;
     align-items: flex-start;
     gap: 3px;
+    margin: 0;
+    cursor: pointer;
+}
+
+.task-title-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
 }
 
 .task-title {
     min-width: 0;
     overflow-wrap: anywhere;
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffffff;
 }
 
 .task-time {
@@ -389,6 +421,13 @@ body::-webkit-scrollbar,
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.02em;
+}
+
+.task-description {
+    display: block;
+    font-size: 12px;
+    color: #a0a0a0;
+    margin-top: 2px;
 }
 
 .task-item.is-completed .task-title {
@@ -400,132 +439,33 @@ body::-webkit-scrollbar,
     color: #6e7a8a;
 }
 
-.task-dialog-content {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    width: min(100%, 360px);
-    min-width: 220px;
-}
-
-.task-dialog-field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    color: #1d2a39;
-    font-size: 13px;
-}
-
-.task-dialog-field label {
-    margin: 0;
-    color: #1d2a39;
-    font-size: 16px;
+.task-priority-badge {
+    display: inline-block;
+    font-size: 10px;
     font-weight: 700;
-    line-height: 1.2;
-}
-
-.task-dialog-field input {
-    box-sizing: border-box;
-    width: 100%;
-    min-height: 40px;
-    padding: 10px 12px;
-    border: 1px solid #c9d8ec;
-    border-radius: 12px;
-    background: #edf3f8;
-    color: #1d2a39;
-    font: inherit;
-    font-size: 17px;
-    font-weight: 400;
-    box-shadow: inset 0 1px 1px rgb(19 34 51 / 6%);
-    -webkit-appearance: none;
-    appearance: none;
-}
-
-.task-dialog-field input::placeholder {
-    color: #7a8ca2;
-    opacity: 1;
-}
-
-.task-dialog-field input:focus {
-    border-color: #4a90e2;
-    background: #f7fbff;
-    outline: 2px solid rgb(74 144 226 / 18%);
-    outline-offset: 1px;
-}
-
-.task-weekday-field {
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-    border: 0;
-}
-
-.task-weekday-field legend {
-    margin-bottom: 7px;
-    color: #1d2a39;
-    font-size: 16px;
-    font-weight: 700;
-}
-
-.task-weekday-options {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
-}
-
-.task-weekday-options label {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    min-width: 0;
-    color: #1d2a39;
-    font-size: 13px;
-    font-weight: 500;
-}
-
-.task-weekday-options input {
-    width: 17px;
-    height: 17px;
-    min-height: 0;
-    flex: 0 0 17px;
-    margin: 0;
-    padding: 0;
+    padding: 2px 6px;
     border-radius: 4px;
-    background: #fff;
-    accent-color: #087af0;
-    -webkit-appearance: checkbox;
-    appearance: auto;
-    cursor: pointer;
+    text-transform: uppercase;
+    line-height: 1.2;
+    vertical-align: middle;
 }
 
-.dialog {
-    border-radius: 22px !important;
-    background: rgb(245 247 250) !important;
-    box-shadow: 0 12px 28px rgb(17 32 45 / 18%) !important;
+.task-priority-badge.priority-baixa {
+    background-color: rgba(76, 175, 80, 0.2);
+    color: #4caf50;
+    border: 1px solid #4caf50;
 }
 
-.dialog .dialog-text,
-.dialog .dialog-content,
-.dialog .dialog-button {
-    color: #1d2a39 !important;
+.task-priority-badge.priority-media {
+    background-color: rgba(255, 152, 0, 0.2);
+    color: #ff9800;
+    border: 1px solid #ff9800;
 }
 
-.dialog .dialog-buttons {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    margin-top: 8px;
-}
-
-.dialog .dialog-button {
-    flex: 1 1 0;
-    min-height: 36px;
-    padding: 0;
-    border: 0;
-    background: transparent !important;
-    color: #1a73d8 !important;
-    font-size: 15px !important;
-    font-weight: 700 !important;
+.task-priority-badge.priority-alta {
+    background-color: rgba(244, 67, 54, 0.2);
+    color: #f44336;
+    border: 1px solid #f44336;
 }
 
 .task-delete-button {
@@ -539,6 +479,7 @@ body::-webkit-scrollbar,
     background: transparent;
     color: #929bab;
     font-size: 18px;
+    margin-left: auto;
 }
 
 .task-delete-button:active {
@@ -619,6 +560,306 @@ body::-webkit-scrollbar,
     font-size: 34px;
 }
 
+/* ==========================================
+   6. MODAIS & JANELAS DE DIÁLOGO (FRAMEWORK7)
+   ========================================== */
+.dialog {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    margin: 0 !important;
+    width: 92% !important;
+    max-width: 400px !important;
+    max-height: 85vh !important;
+    border-radius: 20px !important;
+    background: #f5f7fa !important;
+    box-shadow: 0 16px 32px rgba(0, 0, 0, 0.3) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+}
+
+.dialog-inner {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    padding: 20px 18px 12px 18px !important;
+    box-sizing: border-box !important;
+}
+
+.dialog-text {
+    overflow: visible !important;
+}
+
+.dialog-title {
+    color: #1d2a39 !important;
+    font-size: 19px !important;
+    font-weight: 800 !important;
+    margin-bottom: 12px !important;
+}
+
+.dialog .dialog-text,
+.dialog .dialog-content {
+    color: #1d2a39 !important;
+}
+
+.task-dialog-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.task-dialog-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    box-sizing: border-box;
+    color: #1d2a39;
+    font-size: 13px;
+}
+
+.task-dialog-field label {
+    margin: 0;
+    color: #1d2a39;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.task-dialog-field input,
+.task-dialog-field textarea,
+.task-priority-select {
+    box-sizing: border-box;
+    width: 100%;
+    border: 1px solid #c9d8ec;
+    border-radius: 10px;
+    background: #edf3f8;
+    color: #1d2a39;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 10px 12px;
+    box-shadow: inset 0 1px 2px rgba(19, 34, 51, 0.05);
+    outline: none;
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.task-dialog-field input {
+    min-height: 42px;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.task-dialog-field textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+/* Estilos Dinâmicos do Select de Prioridade */
+.task-priority-select {
+    min-height: 42px;
+    color: #ffffff;
+    font-weight: 700;
+    cursor: pointer;
+    background: #5dabff;
+}
+
+.task-priority-select.priority-baixa {
+    background-color: #2e7d32 !important;
+    border-color: #2e7d32 !important;
+    color: #ffffff !important;
+}
+
+.task-priority-select.priority-media {
+    background-color: #d97706 !important;
+    border-color: #d97706 !important;
+    color: #ffffff !important;
+}
+
+.task-priority-select.priority-alta {
+    background-color: #dc2626 !important;
+    border-color: #dc2626 !important;
+    color: #ffffff !important;
+}
+
+.task-priority-select option {
+    background: #ffffff;
+    color: #1d2a39;
+}
+
+.task-dialog-field input::placeholder,
+.task-dialog-field textarea::placeholder {
+    color: #7a8ca2;
+    opacity: 1;
+}
+
+.task-dialog-field input:focus,
+.task-dialog-field textarea:focus {
+    border-color: #087af0;
+    background: #ffffff;
+    outline: 2px solid rgba(8, 122, 240, 0.2);
+}
+
+.task-dialog-row {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.half-field {
+    flex: 1;
+    min-width: 0;
+}
+
+.task-weekday-field,
+.task-monthday-field,
+.task-months-field {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    box-sizing: border-box !important;
+}
+
+.task-weekday-field legend,
+.task-monthday-field legend,
+.task-months-field legend {
+    margin-bottom: 6px;
+    color: #1d2a39;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+/* Grelhas dos Chips de Seleção */
+.task-weekday-options {
+    display: grid !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 6px;
+    background: #edf3f8;
+    border-radius: 10px;
+    border: 1px solid #c9d8ec;
+}
+
+.task-monthday-grid {
+    display: grid !important;
+    grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+    width: 100% !important;
+    max-height: 120px;
+    overflow-y: auto;
+    padding: 6px;
+    background: #edf3f8;
+    border-radius: 10px;
+    border: 1px solid #c9d8ec;
+    box-sizing: border-box !important;
+}
+
+.task-month-grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 4px !important;
+    width: 100% !important;
+    padding: 6px;
+    background: #edf3f8;
+    border-radius: 10px;
+    border: 1px solid #c9d8ec;
+    box-sizing: border-box !important;
+}
+
+.weekday-chip,
+.monthday-chip,
+.month-chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+    width: 100%;
+}
+
+.weekday-chip input,
+.monthday-chip input,
+.month-chip input {
+    display: none;
+}
+
+.weekday-chip span,
+.monthday-chip span,
+.month-chip span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 28px;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #1d2a39;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid #cbd5e1;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+/* Cor Azul Mais Claro (#38bdf8) quando selecionado */
+.weekday-chip input:checked + span,
+.monthday-chip input:checked + span,
+.month-chip input:checked + span {
+    background: #5dabff !important;
+    color: #0f172a !important;
+    border-color: #5dabff !important;
+    font-weight: 700;
+}
+
+.dialog-inner::-webkit-scrollbar,
+.task-monthday-grid::-webkit-scrollbar {
+    width: 4px;
+}
+
+.dialog-inner::-webkit-scrollbar-thumb,
+.task-monthday-grid::-webkit-scrollbar-thumb {
+    background: #087af0;
+    border-radius: 4px;
+}
+
+.dialog .dialog-buttons {
+    display: flex !important;
+    justify-content: space-between !important;
+    gap: 12px !important;
+    padding: 10px 18px 16px 18px !important;
+    background: #f5f7fa !important;
+    border-top: 1px solid #e2e8f0 !important;
+}
+
+.dialog .dialog-button {
+    flex: 1 1 0 !important;
+    min-height: 40px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 8px !important;
+    background: transparent !important;
+    color: #087af0 !important;
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    cursor: pointer;
+}
+
+.dialog .dialog-button:active {
+    background: rgba(8, 122, 240, 0.1) !important;
+}
+
+/* ==========================================
+   7. PÁGINA DE RELATÓRIOS
+   ========================================== */
 .report-page {
     --f7-navbar-height: 88px;
     --f7-page-bg-color: #123b46;
@@ -760,13 +1001,6 @@ body::-webkit-scrollbar,
     to {
         opacity: 1;
         transform: translateX(0);
-    }
-}
-
-@media (prefers-reduced-motion: reduce) {
-    .report-calendar-grid.report-month-enter-next,
-    .report-calendar-grid.report-month-enter-previous {
-        animation-duration: 1ms;
     }
 }
 
@@ -1069,59 +1303,29 @@ body::-webkit-scrollbar,
     line-height: 21px;
 }
 
-@media (max-width: 360px) {
-    .report-content {
-        padding-right: 16px;
-        padding-left: 16px;
-    }
-
-    .report-week {
-        --report-day-gap: 5px;
-    }
-
-    .report-day {
-        border-radius: 11px;
-        font-size: 16px;
-    }
-
-    .report-stat-card {
-        min-height: 88px;
-        padding: 10px 9px;
-    }
-
-    .report-stat-card h2 {
-        font-size: 9px;
-        line-height: 1.2;
-    }
-
-    .report-completed-card {
-        gap: 6px;
-    }
-
-    .report-completed-value {
-        gap: 3px;
-    }
-
-    .report-completed-count,
-    .report-streak-count {
-        font-size: clamp(22px, 8vw, 28px);
-    }
-
-    .report-completed-total {
-        font-size: 10px;
-    }
-
-    .report-progress-ring {
-        width: 18px;
-        height: 18px;
-        flex-basis: 18px;
-    }
-
-    .report-streak-card .mdi {
-        font-size: 20px;
-    }
+.report-freezes {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background-color: rgba(0, 212, 255, 0.1);
+    border: 1px solid rgba(0, 212, 255, 0.2);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-top: 16px;
+    margin-bottom: 16px;
+    color: #ffffff;
+    font-size: 15px;
 }
 
+.report-freeze-count {
+    font-weight: bold;
+    font-size: 18px;
+    color: #00d4ff;
+}
+
+/* ==========================================
+   8. PÁGINA DE CONFIGURAÇÕES
+   ========================================== */
 .settings-content {
     min-height: 100%;
     padding: 8px 20px 105px;
@@ -1267,11 +1471,6 @@ body::-webkit-scrollbar,
     object-fit: cover;
 }
 
-.settings-avatar-option:focus-visible {
-    outline: 2px solid #fff;
-    outline-offset: 3px;
-}
-
 .settings-save-profile,
 .settings-delete-data,
 .settings-backup-export,
@@ -1369,9 +1568,11 @@ body::-webkit-scrollbar,
     align-items: center;
     gap: 9px;
 }
+
 .settings-accordion-content p {
     margin: 0;
 }
+
 .dialog .settings-backup-password-prompt {
     box-sizing: border-box;
     min-height: 44px;
@@ -1390,16 +1591,28 @@ body::-webkit-scrollbar,
     align-self: flex-start;
 }
 
-.settings-profile-button:focus-visible,
-.settings-accordion summary:focus-visible {
-    outline: 2px solid #fff;
-    outline-offset: 3px;
-}
-
+/* ==========================================
+   9. RESPONSIVIDADE & TEMA CLARO (LIGHT THEME)
+   ========================================== */
 @media (max-width: 360px) {
+    .report-content,
     .settings-content {
         padding-right: 16px;
         padding-left: 16px;
+    }
+
+    .report-week {
+        --report-day-gap: 5px;
+    }
+
+    .report-day {
+        border-radius: 11px;
+        font-size: 16px;
+    }
+
+    .report-stat-card {
+        min-height: 88px;
+        padding: 10px 9px;
     }
 
     .settings-account {
@@ -1412,176 +1625,13 @@ body::-webkit-scrollbar,
         padding-left: 13px;
         font-size: 17px;
     }
-
-    .settings-accordion summary > .mdi {
-        flex-basis: 24px;
-        font-size: 22px;
-    }
-
-    .settings-chevron {
-        width: 34px;
-        height: 34px;
-        flex-basis: 34px;
-    }
-
-    .settings-accordion-content {
-        padding-left: 47px;
-    }
-}
-.report-freezes {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    background-color: rgba(0, 212, 255, 0.1); /* Fundo levemente azulado */
-    border: 1px solid rgba(0, 212, 255, 0.2);
-    border-radius: 12px;
-    padding: 12px 16px;
-    margin-top: 16px;
-    margin-bottom: 16px;
-    color: #ffffff;
-    font-size: 15px;
 }
 
-.report-freeze-count {
-    font-weight: bold;
-    font-size: 18px;
-    color: #00d4ff; /* Azul vibrante para dar destaque ao número */
-}
 @media (prefers-reduced-motion: reduce) {
-    .settings-chevron {
+    .settings-chevron,
+    .report-calendar-grid.report-month-enter-next,
+    .report-calendar-grid.report-month-enter-previous {
+        animation-duration: 1ms;
         transition-duration: 1ms;
-    }
-
-    .app-light-theme .task-page,
-    .app-light-theme .report-page {
-        --f7-page-bg-color: #eef3f8;
-        --f7-navbar-bg-color: #fff;
-        --f7-navbar-text-color: #17202e;
-        --f7-bars-bg-color: #fff;
-        --f7-bars-text-color: #17202e;
-        background: #eef3f8;
-        color: #17202e;
-    }
-
-    .app-light-theme .task-page .navbar,
-    .app-light-theme .task-page .navbar-bg,
-    .app-light-theme .task-page .navbar-inner,
-    .app-light-theme .report-page .navbar,
-    .app-light-theme .report-page .navbar-bg,
-    .app-light-theme .report-page .navbar-inner {
-        background: #fff;
-    }
-
-    .app-light-theme .task-page .navbar .title,
-    .app-light-theme .task-page .navbar .left .link,
-    .app-light-theme .task-page .navbar .right .link,
-    .app-light-theme .task-page .task-month-row,
-    .app-light-theme .task-page .task-day-heading h1,
-    .app-light-theme .task-page .task-item,
-    .app-light-theme .report-page .navbar .title,
-    .app-light-theme .report-page .navbar .left .link,
-    .app-light-theme .report-page .navbar .right .link,
-    .app-light-theme .report-page .report-heading h1,
-    .app-light-theme .report-page .report-day,
-    .app-light-theme .report-page .report-feedback > h2,
-    .app-light-theme .report-page .report-performance-title {
-        color: #17202e;
-    }
-
-    .app-light-theme .task-page .page-content,
-    .app-light-theme .report-page .page-content {
-        background: #eef3f8;
-        color: #17202e;
-    }
-
-    .app-light-theme .task-page .task-day,
-    .app-light-theme .task-page .task-item,
-    .app-light-theme .task-page .task-empty,
-    .app-light-theme .report-page .report-stat-card,
-    .app-light-theme .report-page .report-empty-state,
-    .app-light-theme .report-page .report-day.has-pending {
-        background-color: #fff;
-    }
-
-    .app-light-theme .report-page .report-empty-state {
-        border-color: rgb(23 32 46 / 8%);
-    }
-
-    .app-light-theme .report-page .report-empty-icon {
-        background: #edf3f8;
-        color: #456276;
-    }
-
-    .app-light-theme .report-page .report-empty-title {
-        color: #17202e;
-    }
-
-    .app-light-theme .report-page .report-empty-message {
-        color: #536b79;
-    }
-
-    .app-light-theme .task-page .task-day strong,
-    .app-light-theme .task-page .task-empty-state h2,
-    .app-light-theme .report-page .report-completed-count,
-    .app-light-theme .report-page .report-streak-count {
-        color: #17202e;
-    }
-
-    .app-light-theme .task-page .task-honesty-notice {
-        color: #536b79;
-    }
-
-    .app-light-theme .settings-page .navbar,
-    .app-light-theme .settings-page .navbar-bg,
-    .app-light-theme .settings-page .navbar-inner {
-        background: #fff;
-    }
-
-    .app-light-theme .settings-page .page-content {
-        background: linear-gradient(155deg, #edf4f7, #dce9ee);
-        color: #17202e;
-    }
-
-    .app-light-theme .settings-page .navbar .title,
-    .app-light-theme .settings-page .navbar .left .link,
-    .app-light-theme .settings-page .navbar .right .link {
-        color: #17202e;
-    }
-
-    .app-light-theme .settings-account,
-    .app-light-theme .settings-accordion {
-        background: rgb(255 255 255 / 88%);
-    }
-
-    .app-light-theme .settings-account h1,
-    .app-light-theme .settings-account h2,
-    .app-light-theme .settings-accordion summary {
-        color: #17202e;
-    }
-
-    .app-light-theme .settings-accordion summary > .mdi,
-    .app-light-theme .settings-accordion-content,
-    .app-light-theme .settings-profile-editor label,
-    .app-light-theme .settings-avatar-label {
-        color: #405563;
-    }
-
-    .app-light-theme #settings-backup-password {
-        border-color: #1769d2 !important;
-        background: #fff;
-        color: #17202e;
-    }
-
-    .app-light-theme #settings-backup-password-label {
-        color: #164f92;
-    }
-
-    .app-light-theme .settings-backup-password::placeholder {
-        color: #697985;
-    }
-
-    .app-light-theme .settings-profile-name {
-        background: #fff;
-        color: #17202e;
     }
 }

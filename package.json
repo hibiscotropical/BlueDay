@@ -22,9 +22,7 @@
       "android"
     ],
     "plugins": {
-      "cordova-plugin-local-notification": {
-        "ANDROIDX_CORE_VERSION": "1.12.0"
-      },
+      "cordova-plugin-local-notification": {},
       "cordova-plugin-blue-day-backup": {}
     }
   },
